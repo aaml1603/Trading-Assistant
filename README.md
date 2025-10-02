@@ -1,9 +1,27 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Trading Assistant
 
-## Getting Started
+An AI-powered trading assistant that analyzes your trading strategies and chart screenshots using Anthropic's Claude API.
 
-First, run the development server:
+## Features
 
+- **Strategy Analysis**: Upload PDF documents containing your trading strategies and get AI-powered analysis of entry/exit rules and risk management
+- **Chart Analysis**: Upload chart screenshots and receive detailed analysis on whether there's a valid entry based on your strategy
+- **Vision AI**: Uses Claude's vision capabilities to analyze chart patterns, indicators, and price action
+- **Real-time Feedback**: Get instant analysis results with confidence levels and recommendations
+
+## Setup
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Add your Anthropic API key to `.env.local`:
+```
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+3. Run the development server:
 ```bash
 npm run dev
 # or
@@ -14,20 +32,39 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How to Use
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Upload Trading Strategy**: Upload a PDF containing your trading strategy rules, entry criteria, exit criteria, and risk management guidelines
+2. **Review Analysis**: The AI will analyze and extract key trading rules from your strategy
+3. **Upload Chart**: Upload a screenshot of a chart you want to analyze
+4. **Get Results**: Receive detailed analysis including:
+   - Entry signal (YES/NO)
+   - Confidence level
+   - Key observations
+   - Entry criteria met/not met
+   - Recommendations
+   - Suggested entry price, stop loss, and take profit levels
 
-## Learn More
+## Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Framework**: Next.js 15 with App Router
+- **Styling**: TailwindCSS
+- **AI**: Anthropic Claude (Sonnet 4)
+- **PDF Processing**: pdf-parse
+- **Language**: TypeScript
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Routes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `/api/analyze-strategy`: Analyzes uploaded PDF trading strategies
+- `/api/analyze-chart`: Analyzes chart screenshots based on uploaded strategies
+
+## Notes
+
+- For educational purposes only
+- Not financial advice
+- Always validate AI recommendations with your own analysis
 
 ## Deploy on Vercel
 
