@@ -431,12 +431,12 @@ function UploadSection({
               className="hidden"
               id="strategy-file"
             />
-            <label htmlFor="strategy-file" className="flex-1">
+            <label htmlFor="strategy-file">
               <Button
                 type="button"
                 variant="default"
                 size="sm"
-                className="w-full h-9"
+                className="h-9"
                 disabled={isAnalyzing}
                 asChild
               >
