@@ -418,11 +418,11 @@ function UploadSection({
   };
 
   return (
-    <div className="p-3">
+    <div className="px-3 py-2 bg-muted/30">
       {!hasStrategy ? (
         <div className="space-y-2">
-          {/* Compact button row */}
-          <div className="flex gap-2">
+          {/* Compact button row - horizontal layout */}
+          <div className="flex items-center gap-2 flex-wrap">
             <input
               type="file"
               accept=".pdf"
@@ -436,23 +436,25 @@ function UploadSection({
                 type="button"
                 variant="default"
                 size="sm"
-                className="h-9"
+                className="h-8"
                 disabled={isAnalyzing}
                 asChild
               >
                 <div className="cursor-pointer">
-                  <FileText className="mr-2 h-3.5 w-3.5" />
-                  Upload PDF
+                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  <span className="text-xs">Upload PDF</span>
                 </div>
               </Button>
             </label>
-          </div>
 
-          {/* Notion Integration - More compact */}
-          <NotionConnect
-            onPageSelected={handleNotionPageSelected}
-            isAnalyzing={isAnalyzing}
-          />
+            <div className="h-4 w-px bg-border" />
+
+            {/* Notion Integration - Inline */}
+            <NotionConnect
+              onPageSelected={handleNotionPageSelected}
+              isAnalyzing={isAnalyzing}
+            />
+          </div>
 
           {selectedStrategyFile && showComments && (
             <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
@@ -484,30 +486,32 @@ function UploadSection({
         </div>
       ) : (
         <div className="space-y-2">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleChartSelect}
-            disabled={isAnalyzing}
-            className="hidden"
-            id="chart-files"
-            multiple
-          />
-          <label htmlFor="chart-files">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="w-full h-9"
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleChartSelect}
               disabled={isAnalyzing}
-              asChild
-            >
-              <div className="cursor-pointer">
-                <ImageIcon className="mr-2 h-3.5 w-3.5" />
-                {charts.length > 0 ? `Add More (${charts.length})` : 'Upload Charts'}
-              </div>
-            </Button>
-          </label>
+              className="hidden"
+              id="chart-files"
+              multiple
+            />
+            <label htmlFor="chart-files">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-8"
+                disabled={isAnalyzing}
+                asChild
+              >
+                <div className="cursor-pointer">
+                  <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
+                  <span className="text-xs">{charts.length > 0 ? `Add More (${charts.length})` : 'Upload Charts'}</span>
+                </div>
+              </Button>
+            </label>
+          </div>
 
           {charts.length > 0 && (
             <div className="space-y-1.5 rounded-lg border bg-muted/50 p-2">

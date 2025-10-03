@@ -128,60 +128,60 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
 
   if (!isConnected) {
     return (
-      <div className="space-y-2">
+      <>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="w-full h-9"
+          className="h-8"
           onClick={handleConnect}
           disabled={isAnalyzing}
         >
-          <BookOpen className="mr-2 h-3.5 w-3.5" />
-          Connect Notion
+          <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+          <span className="text-xs">Notion</span>
         </Button>
         {error && (
-          <p className="text-xs text-red-600">{error}</p>
+          <p className="text-xs text-red-600 absolute">{error}</p>
         )}
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
-        <div className="flex items-center gap-1.5">
+    <>
+      {/* Inline connected state */}
+      <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded">
           <Check className="h-3 w-3 text-green-600" />
-          <span className="text-xs font-medium truncate max-w-[120px]">
+          <span className="text-xs font-medium">
             {workspaceName || 'Notion'}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setShowPageList(!showPageList)}
-            disabled={isAnalyzing || loadingPages}
-          >
-            {showPageList ? 'Hide' : 'Browse'}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            onClick={handleDisconnect}
-            disabled={isAnalyzing}
-          >
-            <LogOut className="h-3 w-3" />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2"
+          onClick={() => setShowPageList(!showPageList)}
+          disabled={isAnalyzing || loadingPages}
+        >
+          <span className="text-xs">{showPageList ? 'Hide' : 'Browse'}</span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={handleDisconnect}
+          disabled={isAnalyzing}
+        >
+          <LogOut className="h-3 w-3" />
+        </Button>
       </div>
 
+      {/* Page list - shows below when open */}
       {showPageList && (
-        <div className="rounded-lg border bg-background p-2 space-y-1 max-h-[200px] overflow-y-auto">
+        <div className="absolute left-3 right-3 mt-1 rounded-lg border bg-background p-2 space-y-1 max-h-[200px] overflow-y-auto shadow-lg z-10">
           {loadingPages ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -216,8 +216,8 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       )}
 
       {error && (
-        <p className="text-xs text-red-600">{error}</p>
+        <p className="text-xs text-red-600 absolute">{error}</p>
       )}
-    </div>
+    </>
   );
 }
