@@ -6,13 +6,19 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
+  console.log('[Notion Callback] Request URL:', request.url);
+  console.log('[Notion Callback] Code present:', !!code);
+  console.log('[Notion Callback] Error:', error);
+
   if (error) {
+    console.error('[Notion Callback] OAuth error:', error);
     return NextResponse.redirect(
       new URL(`/?notion_error=${error}`, request.url)
     );
   }
 
   if (!code) {
+    console.error('[Notion Callback] No authorization code received');
     return NextResponse.redirect(
       new URL('/?notion_error=no_code', request.url)
     );
@@ -37,13 +43,15 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json();
-      console.error('Notion token exchange error:', errorData);
+      console.error('[Notion Callback] Token exchange error:', errorData);
+      console.error('[Notion Callback] Status:', tokenResponse.status);
       return NextResponse.redirect(
         new URL('/?notion_error=token_exchange_failed', request.url)
       );
     }
 
     const tokenData = await tokenResponse.json();
+    console.log('[Notion Callback] Token exchange successful');
 
     // Store the access token in a cookie (in production, use a database)
     const cookieStore = await cookies();
@@ -64,11 +72,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.redirect(
-      new URL('/?notion_connected=true', request.url)
-    );
+    const redirectUrl = new URL('/?notion_connected=true', request.url);
+    console.log('[Notion Callback] Redirecting to:', redirectUrl.toString());
+
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
-    console.error('Error in Notion callback:', error);
+    console.error('[Notion Callback] Unexpected error:', error);
     return NextResponse.redirect(
       new URL('/?notion_error=unknown', request.url)
     );
