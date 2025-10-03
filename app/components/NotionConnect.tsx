@@ -128,16 +128,17 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
 
   if (!isConnected) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-2">
         <Button
           type="button"
           variant="outline"
-          className="w-full"
+          size="sm"
+          className="w-full h-9"
           onClick={handleConnect}
           disabled={isAnalyzing}
         >
-          <BookOpen className="mr-2 h-4 w-4" />
-          Connect Notion Account
+          <BookOpen className="mr-2 h-3.5 w-3.5" />
+          Connect Notion
         </Button>
         {error && (
           <p className="text-xs text-red-600">{error}</p>
@@ -147,45 +148,47 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-        <div className="flex items-center gap-2">
-          <Check className="h-4 w-4 text-green-600" />
-          <span className="text-sm font-medium">
-            {workspaceName ? `Connected: ${workspaceName}` : 'Notion Connected'}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
+        <div className="flex items-center gap-1.5">
+          <Check className="h-3 w-3 text-green-600" />
+          <span className="text-xs font-medium truncate max-w-[120px]">
+            {workspaceName || 'Notion'}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            className="h-7 px-2 text-xs"
             onClick={() => setShowPageList(!showPageList)}
             disabled={isAnalyzing || loadingPages}
           >
-            {showPageList ? 'Hide Pages' : 'Browse Pages'}
+            {showPageList ? 'Hide' : 'Browse'}
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            className="h-7 w-7 p-0"
             onClick={handleDisconnect}
             disabled={isAnalyzing}
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-3 w-3" />
           </Button>
         </div>
       </div>
 
       {showPageList && (
-        <div className="rounded-lg border bg-background p-3 space-y-2 max-h-[300px] overflow-y-auto">
+        <div className="rounded-lg border bg-background p-2 space-y-1 max-h-[200px] overflow-y-auto">
           {loadingPages ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : pages.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No pages found in your Notion workspace
+            <p className="text-xs text-muted-foreground text-center py-3">
+              No pages found
             </p>
           ) : (
             pages.map((page) => (
@@ -193,17 +196,17 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
                 key={page.id}
                 onClick={() => handlePageSelect(page.id)}
                 disabled={loadingPageId !== null || isAnalyzing}
-                className="w-full text-left p-3 rounded-md hover:bg-muted transition-colors disabled:opacity-50 border"
+                className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50 border"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{page.title}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs font-medium truncate">{page.title}</p>
+                    <p className="text-[10px] text-muted-foreground">
                       {new Date(page.lastEdited).toLocaleDateString()}
                     </p>
                   </div>
                   {loadingPageId === page.id && (
-                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                    <Loader2 className="h-3 w-3 animate-spin" />
                   )}
                 </div>
               </button>

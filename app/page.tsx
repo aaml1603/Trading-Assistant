@@ -330,7 +330,7 @@ export default function Home() {
       </Conversation>
 
       {/* Input Area */}
-      <div className="border-t p-4 space-y-4">
+      <div className="border-t">
         <UploadSection
           strategyAnalysis={strategyAnalysis}
           onStrategyUpload={handleStrategyUpload}
@@ -339,7 +339,7 @@ export default function Home() {
         />
 
         {/* Text Input for Conversation */}
-        <div className="border-t pt-4">
+        <div className="border-t">
           <PromptInput onSubmit={handleSubmit}>
             <PromptInputTextarea
               value={inputValue}
@@ -418,57 +418,51 @@ function UploadSection({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="p-3">
       {!hasStrategy ? (
-        <div className="space-y-3">
-          {/* PDF Upload */}
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleStrategySelect}
-            disabled={isAnalyzing}
-            className="hidden"
-            id="strategy-file"
-          />
-          <label htmlFor="strategy-file">
-            <Button
-              type="button"
-              variant="default"
-              className="w-full"
+        <div className="space-y-2">
+          {/* Compact button row */}
+          <div className="flex gap-2">
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={handleStrategySelect}
               disabled={isAnalyzing}
-              asChild
-            >
-              <div className="cursor-pointer">
-                <FileText className="mr-2 h-4 w-4" />
-                Upload Trading Strategy PDF
-              </div>
-            </Button>
-          </label>
-
-          {/* Notion Integration */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or</span>
-            </div>
+              className="hidden"
+              id="strategy-file"
+            />
+            <label htmlFor="strategy-file" className="flex-1">
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="w-full h-9"
+                disabled={isAnalyzing}
+                asChild
+              >
+                <div className="cursor-pointer">
+                  <FileText className="mr-2 h-3.5 w-3.5" />
+                  Upload PDF
+                </div>
+              </Button>
+            </label>
           </div>
 
+          {/* Notion Integration - More compact */}
           <NotionConnect
             onPageSelected={handleNotionPageSelected}
             isAnalyzing={isAnalyzing}
           />
 
           {selectedStrategyFile && showComments && (
-            <div className="space-y-3 rounded-lg border bg-muted/50 p-4">
-              <div className="text-sm font-medium">{selectedStrategyFile.name}</div>
+            <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
+              <div className="text-xs font-medium truncate">{selectedStrategyFile.name}</div>
               <textarea
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
-                placeholder="Add additional context (optional)..."
-                rows={3}
-                className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm"
+                placeholder="Add context (optional)..."
+                rows={2}
+                className="w-full resize-none rounded-md border bg-background px-2 py-1.5 text-xs"
               />
               <Button
                 onClick={() => {
@@ -480,7 +474,8 @@ function UploadSection({
                   }
                 }}
                 disabled={isAnalyzing}
-                className="w-full"
+                size="sm"
+                className="w-full h-8"
               >
                 Analyze Strategy
               </Button>
@@ -488,7 +483,7 @@ function UploadSection({
           )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <input
             type="file"
             accept="image/*"
@@ -502,22 +497,23 @@ function UploadSection({
             <Button
               type="button"
               variant="secondary"
-              className="w-full"
+              size="sm"
+              className="w-full h-9"
               disabled={isAnalyzing}
               asChild
             >
               <div className="cursor-pointer">
-                <ImageIcon className="mr-2 h-4 w-4" />
-                {charts.length > 0 ? `Add More Charts (${charts.length})` : 'Upload Chart Screenshots'}
+                <ImageIcon className="mr-2 h-3.5 w-3.5" />
+                {charts.length > 0 ? `Add More (${charts.length})` : 'Upload Charts'}
               </div>
             </Button>
           </label>
 
           {charts.length > 0 && (
-            <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
+            <div className="space-y-1.5 rounded-lg border bg-muted/50 p-2">
               {charts.map((chart, index) => (
-                <div key={index} className="flex items-center gap-2 rounded-md border bg-background p-2">
-                  <img src={chart.previewUrl} alt="" className="h-12 w-12 rounded object-cover" />
+                <div key={index} className="flex items-center gap-2 rounded-md border bg-background p-1.5">
+                  <img src={chart.previewUrl} alt="" className="h-10 w-10 rounded object-cover" />
                   <input
                     type="text"
                     value={chart.timeframe}
@@ -526,12 +522,13 @@ function UploadSection({
                       newCharts[index].timeframe = e.target.value;
                       setCharts(newCharts);
                     }}
-                    placeholder="Timeframe (e.g., 1H)"
-                    className="flex-1 rounded-md border bg-background px-2 py-1 text-sm"
+                    placeholder="e.g., 1H"
+                    className="flex-1 rounded-md border bg-background px-2 py-1 text-xs"
                   />
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="h-7 w-7 p-0"
                     onClick={() => {
                       URL.revokeObjectURL(chart.previewUrl);
                       setCharts(charts.filter((_, i) => i !== index));
@@ -548,9 +545,10 @@ function UploadSection({
                   setCharts([]);
                 }}
                 disabled={isAnalyzing || charts.some(c => !c.timeframe.trim())}
-                className="w-full"
+                size="sm"
+                className="w-full h-8"
               >
-                {charts.some(c => !c.timeframe.trim()) ? 'Specify All Timeframes' : 'Analyze Charts'}
+                {charts.some(c => !c.timeframe.trim()) ? 'Specify Timeframes' : 'Analyze Charts'}
               </Button>
             </div>
           )}
