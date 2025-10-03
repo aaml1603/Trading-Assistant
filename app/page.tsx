@@ -48,6 +48,7 @@ export default function Home() {
   const [strategyAnalysis, setStrategyAnalysis] = useState<string | null>(null);
   const [strategyText, setStrategyText] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [chartImages, setChartImages] = useState<Array<{ base64: string; mimeType: string; timeframe: string }>>([]);
 
   // Strategy upload handler
   const handleStrategyUpload = useCallback(async (file: File, comments?: string) => {
@@ -146,6 +147,21 @@ export default function Home() {
     }]);
 
     try {
+      // Convert charts to base64 and store for future chat context
+      const chartBase64Array = await Promise.all(
+        charts.map(async (chart) => {
+          const arrayBuffer = await chart.file.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          return {
+            base64,
+            mimeType: chart.file.type,
+            timeframe: chart.timeframe,
+          };
+        })
+      );
+
+      setChartImages(chartBase64Array);
+
       const formData = new FormData();
       charts.forEach((chart, index) => {
         formData.append(`chart_${index}`, chart.file);
@@ -194,6 +210,7 @@ export default function Home() {
     setIsAnalyzing(false);
     setStrategyAnalysis(null);
     setStrategyText('');
+    setChartImages([]);
   }, []);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(async (event) => {
@@ -228,6 +245,7 @@ export default function Home() {
       formData.append('message', userMessage);
       formData.append('strategy', strategyText || '');
       formData.append('conversationHistory', JSON.stringify(messages));
+      formData.append('chartImages', JSON.stringify(chartImages));
 
       const response = await fetch('/api/chat', {
         method: 'POST',

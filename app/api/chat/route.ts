@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     const message = formData.get('message') as string;
     const strategy = formData.get('strategy') as string;
     const conversationHistoryStr = formData.get('conversationHistory') as string;
+    const chartImagesStr = formData.get('chartImages') as string;
 
     if (!message) {
       return NextResponse.json(
@@ -20,7 +21,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse conversation history
-    let conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    let conversationHistory: Array<{
+      role: 'user' | 'assistant';
+      content: string | Array<
+        | { type: 'text'; text: string }
+        | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
+      >
+    }> = [];
     try {
       const parsed = JSON.parse(conversationHistoryStr || '[]');
       // Convert to Claude format (last 10 messages for context)
@@ -35,6 +43,16 @@ export async function POST(request: NextRequest) {
       // If parsing fails, continue without history
     }
 
+    // Parse chart images if provided
+    let chartImages: Array<{ base64: string; mimeType: string; timeframe: string }> = [];
+    try {
+      if (chartImagesStr) {
+        chartImages = JSON.parse(chartImagesStr);
+      }
+    } catch {
+      // If parsing fails, continue without charts
+    }
+
     // Build system prompt
     let systemPrompt = `You are an expert trading assistant helping traders analyze their strategies and make informed trading decisions. You provide clear, actionable advice based on trading principles and technical analysis.`;
 
@@ -42,19 +60,60 @@ export async function POST(request: NextRequest) {
       systemPrompt += `\n\nThe user has uploaded the following trading strategy:\n\n${strategy}\n\nUse this strategy as context when answering questions.`;
     }
 
+    if (chartImages.length > 0) {
+      systemPrompt += `\n\nThe user has uploaded ${chartImages.length} chart image(s) for analysis. These charts show different timeframes: ${chartImages.map(c => c.timeframe).join(', ')}. Reference these charts when answering questions about the current market setup.`;
+    }
+
     // Build messages array
-    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    const messages: Array<{
+      role: 'user' | 'assistant';
+      content: string | Array<
+        | { type: 'text'; text: string }
+        | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
+      >
+    }> = [];
 
     // Add conversation history
     if (conversationHistory.length > 0) {
       messages.push(...conversationHistory);
     }
 
-    // Add current user message
-    messages.push({
-      role: 'user' as const,
-      content: message,
-    });
+    // Build current message content with charts if provided
+    if (chartImages.length > 0) {
+      const messageContent: Array<
+        | { type: 'text'; text: string }
+        | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
+      > = [];
+
+      // Add all chart images
+      chartImages.forEach((chart) => {
+        messageContent.push({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: chart.mimeType as ImageMediaType,
+            data: chart.base64,
+          },
+        });
+      });
+
+      // Add text message
+      messageContent.push({
+        type: 'text' as const,
+        text: message,
+      });
+
+      messages.push({
+        role: 'user' as const,
+        content: messageContent,
+      });
+    } else {
+      // Text-only message
+      messages.push({
+        role: 'user' as const,
+        content: message,
+      });
+    }
 
     // Get response from Claude
     const response = await anthropic.messages.create({
