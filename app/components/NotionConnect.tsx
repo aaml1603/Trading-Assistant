@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Check, Loader2, LogOut } from 'lucide-react';
+import { Check, Loader2, LogOut } from 'lucide-react';
+import Image from 'next/image';
 
 interface NotionPage {
   id: string;
@@ -30,7 +31,6 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('notion_connected') === 'true') {
       setIsConnected(true);
-      fetchPages();
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
       return;
@@ -50,8 +50,6 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
     if (workspaceNameCookie) {
       setWorkspaceName(decodeURIComponent(workspaceNameCookie));
       setIsConnected(true);
-      // Auto-fetch pages on mount if already connected
-      fetchPages();
     }
   }, []);
 
@@ -90,7 +88,6 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       }
 
       setPages(data.pages || []);
-      setShowPageList(true);
     } catch (err) {
       console.error('Error fetching pages:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch pages');
@@ -117,6 +114,11 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
         throw new Error(data.error || 'Failed to fetch page content');
       }
 
+      // Log content size for large documents
+      if (data.contentLength > 20000) {
+        console.log(`📄 Processing large Notion page: ${Math.round(data.contentLength / 1000)}KB - This may take a few minutes...`);
+      }
+
       onPageSelected(data.content, data.title);
       setShowPageList(false);
     } catch (err) {
@@ -137,7 +139,13 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
           onClick={handleConnect}
           disabled={isAnalyzing}
         >
-          <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+          <Image
+            src="/logos/Notion_app_logo.png"
+            alt="Notion"
+            width={14}
+            height={14}
+            className="mr-1.5"
+          />
           <span className="text-xs">Notion</span>
         </Button>
         {error && (
@@ -148,10 +156,16 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
   }
 
   return (
-    <>
+    <div className="relative">
       {/* Inline connected state */}
       <div className="flex items-center gap-1">
-        <div className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded">
+          <Image
+            src="/logos/Notion_app_logo.png"
+            alt="Notion"
+            width={14}
+            height={14}
+          />
           <Check className="h-3 w-3 text-green-600" />
           <span className="text-xs font-medium">
             {workspaceName || 'Notion'}
@@ -162,10 +176,15 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
           variant="ghost"
           size="sm"
           className="h-8 px-2"
-          onClick={() => setShowPageList(!showPageList)}
+          onClick={() => {
+            if (!showPageList && pages.length === 0) {
+              fetchPages();
+            }
+            setShowPageList(!showPageList);
+          }}
           disabled={isAnalyzing || loadingPages}
         >
-          <span className="text-xs">{showPageList ? 'Hide' : 'Browse'}</span>
+          <span className="text-xs">{showPageList ? 'Hide Pages' : 'Browse Pages'}</span>
         </Button>
         <Button
           type="button"
@@ -179,9 +198,9 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
         </Button>
       </div>
 
-      {/* Page list - shows below when open */}
+      {/* Page list - shows above when open */}
       {showPageList && (
-        <div className="absolute left-3 right-3 mt-1 rounded-lg border bg-background p-2 space-y-1 max-h-[200px] overflow-y-auto shadow-lg z-10">
+        <div className="absolute left-0 right-0 bottom-full mb-1 rounded-lg border bg-background p-2 space-y-1 max-h-[200px] overflow-y-auto shadow-lg z-50">
           {loadingPages ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -218,6 +237,6 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       {error && (
         <p className="text-xs text-red-600 absolute">{error}</p>
       )}
-    </>
+    </div>
   );
 }

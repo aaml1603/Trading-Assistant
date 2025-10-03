@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
+// Configure route for long-running requests
+export const maxDuration = 300; // 5 minutes
+export const dynamic = 'force-dynamic';
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 300000, // 5 minutes timeout
 });
 
 export async function POST(request: NextRequest) {
@@ -19,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the analysis prompt with optional additional comments
-    let analysisPrompt = `You are a trading strategy analyzer. Please analyze the trading strategy document provided and extract the key rules, entry criteria, exit criteria, and risk management guidelines. Provide a clear, structured summary that can be used to evaluate chart setups.`;
+    let analysisPrompt = `You are a trading strategy analyzer. IMPORTANT: Respond in the same language as the content of the document provided. Please analyze the trading strategy document provided and extract the key rules, entry criteria, exit criteria, and risk management guidelines. Provide a clear, structured summary that can be used to evaluate chart setups.`;
 
     if (additionalComments && additionalComments.trim()) {
       analysisPrompt += `\n\nThe user has provided additional context:\n${additionalComments}\n\nPlease incorporate this additional information into your analysis.`;
@@ -70,7 +75,7 @@ Also extract the full text content of the strategy for future reference.`;
       ];
     }
 
-    // Analyze the strategy using Claude
+    // Analyze the strategy using Claude (timeout configured at client level)
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
@@ -91,8 +96,31 @@ Also extract the full text content of the strategy for future reference.`;
     });
   } catch (error) {
     console.error('Error analyzing strategy:', error);
+
+    // Handle specific error types
+    if (error instanceof Error) {
+      if (error.message.includes('timeout') || error.message.includes('499') || error.message.includes('522')) {
+        return NextResponse.json(
+          { error: 'The document is very large and analysis timed out. Please try splitting it into smaller sections.' },
+          { status: 408 }
+        );
+      }
+      if (error.message.includes('429')) {
+        return NextResponse.json(
+          { error: 'Too many requests. Please wait a moment and try again.' },
+          { status: 429 }
+        );
+      }
+      if (error.message.includes('400')) {
+        return NextResponse.json(
+          { error: 'Invalid request. Please check your document format and try again.' },
+          { status: 400 }
+        );
+      }
+    }
+
     return NextResponse.json(
-      { error: 'Failed to analyze strategy' },
+      { error: 'Failed to analyze strategy. Please try again.' },
       { status: 500 }
     );
   }

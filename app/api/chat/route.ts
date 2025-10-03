@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
+// Configure route for chat requests
+export const maxDuration = 60; // 1 minute for chat
+export const dynamic = 'force-dynamic';
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 60000, // 1 minute timeout
 });
 
 export async function POST(request: NextRequest) {
@@ -54,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build system prompt
-    let systemPrompt = `You are an expert trading assistant helping traders analyze their strategies and make informed trading decisions. You provide clear, actionable advice based on trading principles and technical analysis.`;
+    let systemPrompt = `You are an expert trading assistant helping traders analyze their strategies and make informed trading decisions. You provide clear, actionable advice based on trading principles and technical analysis. IMPORTANT: Always respond in the same language as the user's messages and strategy content.`;
 
     if (strategy) {
       systemPrompt += `\n\nThe user has uploaded the following trading strategy:\n\n${strategy}\n\nUse this strategy as context when answering questions.`;

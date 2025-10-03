@@ -15,10 +15,16 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon } from 'lucide-react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link } from 'lucide-react';
 import { type FormEventHandler, useCallback, useState } from 'react';
 import NotionConnect from './components/NotionConnect';
 import { ThemeToggle } from './components/theme-toggle';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 type ChatMessage = {
   id: string;
@@ -34,11 +40,58 @@ type ChatMessage = {
   isStreaming?: boolean;
 };
 
+// Export utility functions
+const exportConversation = (messages: ChatMessage[], format: 'json' | 'markdown' | 'text') => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+  let content = '';
+  let filename = '';
+  let mimeType = '';
+
+  switch (format) {
+    case 'json':
+      content = JSON.stringify(messages, null, 2);
+      filename = `conversation-${timestamp}.json`;
+      mimeType = 'application/json';
+      break;
+
+    case 'markdown':
+      content = messages.map(msg => {
+        const time = new Date(msg.timestamp).toLocaleString();
+        const role = msg.role === 'user' ? '👤 User' : '🤖 AI Assistant';
+        return `## ${role}\n*${time}*\n\n${msg.content}\n\n---\n`;
+      }).join('\n');
+      filename = `conversation-${timestamp}.md`;
+      mimeType = 'text/markdown';
+      break;
+
+    case 'text':
+      content = messages.map(msg => {
+        const time = new Date(msg.timestamp).toLocaleString();
+        const role = msg.role === 'user' ? 'User' : 'AI Assistant';
+        return `[${time}] ${role}:\n${msg.content}\n\n${'='.repeat(80)}\n`;
+      }).join('\n');
+      filename = `conversation-${timestamp}.txt`;
+      mimeType = 'text/plain';
+      break;
+  }
+
+  // Create and trigger download
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: "Welcome to AI Trading Assistant! I'll help you analyze your trading strategies and charts.\n\n📊 **Step 1:** Upload your trading strategy PDF\n📈 **Step 2:** Upload chart screenshots with timeframes\n🤖 **Step 3:** Get AI-powered entry analysis\n\nLet's start by uploading your trading strategy document, or ask me anything about trading!",
+      content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n1. Click **Upload PDF** to upload your trading strategy document\n2. Add optional context or notes about your strategy\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n1. Click **Notion** to connect your workspace\n2. Browse and select your strategy document\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n- Simply type your trading questions in the chat below\n- Ask about strategy development, risk management, technical analysis, etc.\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n- Paste TradingView snapshot links directly instead of downloading screenshots\n- Add context when uploading strategies for more tailored analysis\n- Use the chat to ask follow-up questions about any analysis\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
       role: 'assistant',
       timestamp: new Date(),
     }
@@ -70,6 +123,7 @@ export default function Home() {
       role: 'assistant',
       timestamp: new Date(),
       isStreaming: true,
+      type: 'strategy',
     }]);
 
     try {
@@ -79,10 +133,16 @@ export default function Home() {
         formData.append('additionalComments', comments);
       }
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout for long documents
+
       const response = await fetch('/api/analyze-strategy', {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -99,9 +159,18 @@ export default function Home() {
           : msg
       ));
     } catch (err) {
+      let errorMessage = 'Failed to analyze strategy';
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          errorMessage = 'The document is extremely large and exceeded the 5-minute processing limit. Consider splitting it into smaller sections.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+
       setMessages(prev => prev.map(msg =>
         msg.id === streamingMsgId
-          ? { ...msg, content: `❌ Error: ${err instanceof Error ? err.message : 'Failed to analyze strategy'}`, isStreaming: false }
+          ? { ...msg, content: `❌ Error: ${errorMessage}`, isStreaming: false }
           : msg
       ));
     } finally {
@@ -201,7 +270,7 @@ export default function Home() {
     setMessages([
       {
         id: '1',
-        content: "Welcome to AI Trading Assistant! I'll help you analyze your trading strategies and charts.\n\n📊 **Step 1:** Upload your trading strategy PDF\n📈 **Step 2:** Upload chart screenshots with timeframes\n🤖 **Step 3:** Get AI-powered entry analysis\n\nLet's start by uploading your trading strategy document!",
+        content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n1. Click **Upload PDF** to upload your trading strategy document\n2. Add optional context or notes about your strategy\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n1. Click **Notion** to connect your workspace\n2. Browse and select your strategy document\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n- Simply type your trading questions in the chat below\n- Ask about strategy development, risk management, technical analysis, etc.\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n- Paste TradingView snapshot links directly instead of downloading screenshots\n- Add context when uploading strategies for more tailored analysis\n- Use the chat to ask follow-up questions about any analysis\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
         role: 'assistant',
         timestamp: new Date(),
       }
@@ -285,11 +354,35 @@ export default function Home() {
           </div>
           <div className="h-4 w-px bg-border" />
           <span className="text-muted-foreground text-xs">
-            Powered by Claude Sonnet 4
+            Powered by House of Stocks
           </span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                disabled={messages.length <= 1}
+              >
+                <Download className="size-4" />
+                <span className="ml-1">Export</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportConversation(messages, 'markdown')}>
+                Export as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportConversation(messages, 'json')}>
+                Export as JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportConversation(messages, 'text')}>
+                Export as Text
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="ghost"
             size="sm"
@@ -310,17 +403,24 @@ export default function Home() {
               <Message from={message.role}>
                 <MessageContent>
                   {message.isStreaming && message.content === '' ? (
-                    <div className="flex items-center gap-2">
-                      <Loader size={14} />
-                      <span className="text-muted-foreground text-sm">Analyzing...</span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Loader size={14} />
+                        <span className="text-muted-foreground text-sm">Analyzing...</span>
+                      </div>
+                      {message.type === 'strategy' && (
+                        <span className="text-xs text-muted-foreground">
+                          Large documents may take up to 5 minutes to process
+                        </span>
+                      )}
                     </div>
                   ) : (
                     message.content
                   )}
                 </MessageContent>
                 <MessageAvatar
-                  src={message.role === 'user' ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=user' : 'https://api.dicebear.com/7.x/bottts/svg?seed=ai'}
-                  name={message.role === 'user' ? 'User' : 'AI Assistant'}
+                  src={message.role === 'user' ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=trader&backgroundColor=b6e3f4' : 'https://api.dicebear.com/7.x/bottts/svg?seed=trading-ai&backgroundColor=c0aede'}
+                  name={message.role === 'user' ? 'Trader' : 'AI Trading Assistant'}
                 />
               </Message>
             </div>
@@ -339,7 +439,7 @@ export default function Home() {
         />
 
         {/* Text Input for Conversation */}
-        <div className="border-t">
+        <div className="border-t px-6 py-3">
           <PromptInput onSubmit={handleSubmit}>
             <PromptInputTextarea
               value={inputValue}
@@ -385,6 +485,10 @@ function UploadSection({
   const [comments, setComments] = useState('');
   const [charts, setCharts] = useState<Array<{ file: File; previewUrl: string; timeframe: string }>>([]);
   const [showComments, setShowComments] = useState(false);
+  const [tradingViewUrl, setTradingViewUrl] = useState('');
+  const [showTradingViewInput, setShowTradingViewInput] = useState(false);
+  const [loadingTradingView, setLoadingTradingView] = useState(false);
+  const [tradingViewError, setTradingViewError] = useState<string | null>(null);
 
   const handleStrategySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -417,8 +521,54 @@ function UploadSection({
     );
   };
 
+  const handleTradingViewLink = async () => {
+    if (!tradingViewUrl.trim()) return;
+
+    setLoadingTradingView(true);
+    setTradingViewError(null);
+
+    try {
+      const response = await fetch('/api/tradingview/get-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: tradingViewUrl }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch TradingView chart');
+      }
+
+      // Convert base64 to blob and create a File object
+      const byteCharacters = atob(data.base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: data.mimeType });
+
+      const file = new File([blob], 'tradingview-chart.png', { type: data.mimeType });
+      const previewUrl = URL.createObjectURL(blob);
+
+      setCharts(prev => [...prev, {
+        file,
+        previewUrl,
+        timeframe: '',
+      }]);
+
+      setTradingViewUrl('');
+      setShowTradingViewInput(false);
+    } catch (err) {
+      setTradingViewError(err instanceof Error ? err.message : 'Failed to load TradingView chart');
+    } finally {
+      setLoadingTradingView(false);
+    }
+  };
+
   return (
-    <div className="px-3 py-2 bg-muted/30">
+    <div className="px-6 py-3 bg-muted/30">
       {!hasStrategy ? (
         <div className="space-y-2">
           {/* Compact button row - horizontal layout */}
@@ -486,7 +636,7 @@ function UploadSection({
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <input
               type="file"
               accept="image/*"
@@ -511,7 +661,66 @@ function UploadSection({
                 </div>
               </Button>
             </label>
+
+            <div className="h-4 w-px bg-border" />
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={isAnalyzing || loadingTradingView}
+              onClick={() => setShowTradingViewInput(!showTradingViewInput)}
+            >
+              <Link className="mr-1.5 h-3.5 w-3.5" />
+              <span className="text-xs">TradingView Link</span>
+            </Button>
           </div>
+
+          {showTradingViewInput && (
+            <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
+              <div className="text-xs font-medium">Add TradingView Chart</div>
+              <input
+                type="text"
+                value={tradingViewUrl}
+                onChange={(e) => setTradingViewUrl(e.target.value)}
+                placeholder="Paste TradingView snapshot URL (e.g., https://www.tradingview.com/x/...)"
+                className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                disabled={loadingTradingView}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleTradingViewLink();
+                  }
+                }}
+              />
+              {tradingViewError && (
+                <p className="text-xs text-red-600">{tradingViewError}</p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleTradingViewLink}
+                  disabled={!tradingViewUrl.trim() || loadingTradingView}
+                  size="sm"
+                  className="flex-1 h-8"
+                >
+                  {loadingTradingView ? 'Loading...' : 'Add Chart'}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowTradingViewInput(false);
+                    setTradingViewUrl('');
+                    setTradingViewError(null);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  disabled={loadingTradingView}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
 
           {charts.length > 0 && (
             <div className="space-y-1.5 rounded-lg border bg-muted/50 p-2">

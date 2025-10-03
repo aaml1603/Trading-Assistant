@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
+// Configure route for potentially long-running requests
+export const maxDuration = 60; // 1 minute for chart analysis
+export const dynamic = 'force-dynamic';
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 60000, // 1 minute timeout for chart analysis
 });
 
 export async function POST(request: NextRequest) {
@@ -72,7 +77,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Build the analysis prompt
-    let analysisPrompt = `You are a professional trading analyst. I'm providing ${charts.length} chart screenshot${charts.length > 1 ? 's' : ''} for analysis across different timeframes:\n\n`;
+    let analysisPrompt = `You are a professional trading analyst. IMPORTANT: Respond in the same language as the trading strategy content provided below. I'm providing ${charts.length} chart screenshot${charts.length > 1 ? 's' : ''} for analysis across different timeframes:\n\n`;
 
     charts.forEach((chart, index) => {
       analysisPrompt += `**Chart ${index + 1}**: ${chart.timeframe}\n`;

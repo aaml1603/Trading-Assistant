@@ -124,13 +124,14 @@ export async function POST(request: NextRequest) {
       title = properties.Name.title[0].plain_text;
     }
 
-    // Get page content
+    // Get page content (no truncation - process full content)
     const content = await getBlockContent(notion, pageId);
 
     return NextResponse.json({
       title,
       content,
       url: page.url,
+      contentLength: content.length,
     });
   } catch (error) {
     console.error('Error fetching Notion page content:', error);
