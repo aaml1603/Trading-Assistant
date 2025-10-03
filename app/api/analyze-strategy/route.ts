@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { ObjectId } from 'mongodb';
+import { getDb } from '@/lib/mongodb';
+import { COLLECTIONS, Strategy } from '@/lib/models';
+import { getUserFromRequest } from '@/lib/auth';
 
 // Configure route for long-running requests
 export const maxDuration = 300; // 5 minutes
@@ -12,6 +16,15 @@ const anthropic = new Anthropic({
 
 export async function POST(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized - please login first' },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const pdfFile = formData.get('pdf') as File;
     const additionalComments = formData.get('additionalComments') as string;
@@ -89,10 +102,31 @@ Also extract the full text content of the strategy for future reference.`;
 
     const analysis = message.content[0].type === 'text' ? message.content[0].text : '';
 
+    // Save strategy to MongoDB
+    const db = await getDb();
+    const strategiesCollection = db.collection<Strategy>(COLLECTIONS.STRATEGIES);
+
+    const strategyName = pdfFile.name.replace(/\.(pdf|txt)$/i, '');
+    const now = new Date();
+
+    const newStrategy: Strategy = {
+      userId: new ObjectId(user.userId),
+      name: strategyName,
+      analysis,
+      strategyText: analysis,
+      fileType: pdfFile.type,
+      additionalComments: additionalComments || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await strategiesCollection.insertOne(newStrategy);
+
     return NextResponse.json({
       success: true,
       analysis,
-      strategyText: analysis, // Use the analysis as strategy text since Claude extracted it
+      strategyText: analysis,
+      strategyId: result.insertedId.toString(),
     });
   } catch (error) {
     console.error('Error analyzing strategy:', error);

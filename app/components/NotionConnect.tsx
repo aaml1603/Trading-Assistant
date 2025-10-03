@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check, Loader2, LogOut } from 'lucide-react';
 import Image from 'next/image';
+import { useAuth } from '../contexts/AuthContext';
 
 interface NotionPage {
   id: string;
@@ -18,19 +19,21 @@ interface NotionConnectProps {
 }
 
 export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionConnectProps) {
-  const [isConnected, setIsConnected] = useState(false);
-  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+  const { user, token, refreshUser } = useAuth();
   const [pages, setPages] = useState<NotionPage[]>([]);
   const [loadingPages, setLoadingPages] = useState(false);
   const [showPageList, setShowPageList] = useState(false);
   const [loadingPageId, setLoadingPageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const isConnected = !!user?.notionConnected;
+  const workspaceName = user?.notionWorkspaceName;
+
   useEffect(() => {
     // Check if connected via URL param
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('notion_connected') === 'true') {
-      setIsConnected(true);
+      refreshUser(); // Refresh user to get updated Notion status
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
       return;
@@ -40,28 +43,38 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       setError('Failed to connect to Notion. Please try again.');
       window.history.replaceState({}, '', window.location.pathname);
     }
-
-    // Check for workspace name cookie
-    const workspaceNameCookie = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('notion_workspace_name='))
-      ?.split('=')[1];
-
-    if (workspaceNameCookie) {
-      setWorkspaceName(decodeURIComponent(workspaceNameCookie));
-      setIsConnected(true);
-    }
   }, []);
 
-  const handleConnect = () => {
-    window.location.href = '/api/notion/auth';
+  const handleConnect = async () => {
+    try {
+      const response = await fetch('/api/notion/auth', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate Notion connection');
+      }
+
+      // Redirect to Notion OAuth page
+      window.location.href = data.authUrl;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect to Notion');
+    }
   };
 
   const handleDisconnect = async () => {
     try {
-      await fetch('/api/notion/disconnect', { method: 'POST' });
-      setIsConnected(false);
-      setWorkspaceName(null);
+      await fetch('/api/notion/disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      await refreshUser(); // Refresh user to update Notion status
       setPages([]);
       setShowPageList(false);
       setError(null);
@@ -74,7 +87,11 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
     setLoadingPages(true);
     setError(null);
     try {
-      const response = await fetch('/api/notion/pages');
+      const response = await fetch('/api/notion/pages', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
 
       console.log('Notion API response:', data);
@@ -91,7 +108,6 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
     } catch (err) {
       console.error('Error fetching pages:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch pages');
-      setIsConnected(false);
     } finally {
       setLoadingPages(false);
     }
@@ -104,7 +120,10 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
     try {
       const response = await fetch('/api/notion/page-content', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ pageId }),
       });
 

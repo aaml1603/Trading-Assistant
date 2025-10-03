@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { ObjectId } from 'mongodb';
+import { getDb } from '@/lib/mongodb';
+import { COLLECTIONS, User } from '@/lib/models';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const userId = searchParams.get('state'); // User ID from state parameter
 
   console.log('[Notion Callback] Request URL:', request.url);
   console.log('[Notion Callback] Code present:', !!code);
+  console.log('[Notion Callback] User ID:', userId);
   console.log('[Notion Callback] Error:', error);
 
   if (error) {
@@ -21,6 +25,13 @@ export async function GET(request: NextRequest) {
     console.error('[Notion Callback] No authorization code received');
     return NextResponse.redirect(
       new URL('/?notion_error=no_code', request.url)
+    );
+  }
+
+  if (!userId) {
+    console.error('[Notion Callback] No user ID in state parameter');
+    return NextResponse.redirect(
+      new URL('/?notion_error=unauthorized', request.url)
     );
   }
 
@@ -53,24 +64,21 @@ export async function GET(request: NextRequest) {
     const tokenData = await tokenResponse.json();
     console.log('[Notion Callback] Token exchange successful');
 
-    // Store the access token in a cookie (in production, use a database)
-    const cookieStore = await cookies();
-    cookieStore.set('notion_access_token', tokenData.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 90, // 90 days
-      path: '/',
-    });
+    // Save the access token to MongoDB
+    const db = await getDb();
+    const usersCollection = db.collection<User>(COLLECTIONS.USERS);
 
-    // Also store workspace info
-    if (tokenData.workspace_name) {
-      cookieStore.set('notion_workspace_name', tokenData.workspace_name, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 60 * 60 * 24 * 90,
-        path: '/',
-      });
-    }
+    await usersCollection.updateOne(
+      { _id: new ObjectId(userId) },
+      {
+        $set: {
+          notionAccessToken: tokenData.access_token,
+          notionWorkspaceName: tokenData.workspace_name || undefined,
+        },
+      }
+    );
+
+    console.log('[Notion Callback] Saved Notion credentials to MongoDB');
 
     const redirectUrl = new URL('/?notion_connected=true', request.url);
     console.log('[Notion Callback] Redirecting to:', redirectUrl.toString());

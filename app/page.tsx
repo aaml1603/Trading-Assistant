@@ -15,7 +15,7 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check } from 'lucide-react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut } from 'lucide-react';
 import { type FormEventHandler, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import NotionConnect from './components/NotionConnect';
@@ -26,6 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useAuth } from './contexts/AuthContext';
+import AuthForm from './components/AuthForm';
 
 type ChatMessage = {
   id: string;
@@ -117,6 +119,28 @@ const stripMarkdown = (markdown: string): string => {
 };
 
 export default function Home() {
+  const { user, logout, isLoading, token } = useAuth();
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader size={32} />
+      </div>
+    );
+  }
+
+  // Show auth form if not logged in
+  if (!user || !token) {
+    return <AuthForm />;
+  }
+
+  // User is logged in, show the app
+  return <TradingAssistant />;
+}
+
+function TradingAssistant() {
+  const { user, logout, token } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -168,6 +192,9 @@ export default function Home() {
 
       const response = await fetch('/api/analyze-strategy', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
         signal: controller.signal,
       });
@@ -271,6 +298,9 @@ export default function Home() {
 
       const response = await fetch('/api/analyze-chart', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
 
@@ -348,6 +378,9 @@ export default function Home() {
 
       const response = await fetch('/api/chat', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
 
@@ -392,7 +425,7 @@ export default function Home() {
           </div>
           <div className="hidden sm:block h-4 w-px bg-border" />
           <span className="hidden sm:block text-muted-foreground text-xs">
-            Powered by House of Stocks
+            {user?.email}
           </span>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
@@ -429,6 +462,16 @@ export default function Home() {
           >
             <RotateCcwIcon className="size-3.5 sm:size-4" />
             <span className="ml-1 hidden sm:inline">Reset</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={logout}
+            className="h-7 sm:h-8 px-1.5 sm:px-2"
+            title="Logout"
+          >
+            <LogOut className="size-3.5 sm:size-4" />
+            <span className="ml-1 hidden sm:inline">Logout</span>
           </Button>
         </div>
       </div>
@@ -495,6 +538,7 @@ export default function Home() {
           onStrategyUpload={handleStrategyUpload}
           onChartUpload={handleChartUpload}
           isAnalyzing={isAnalyzing}
+          token={token!}
         />
 
         {/* Text Input for Conversation */}
@@ -535,11 +579,13 @@ function UploadSection({
   onStrategyUpload,
   onChartUpload,
   isAnalyzing,
+  token,
 }: {
   strategyAnalysis: string | null;
   onStrategyUpload: (file: File, comments?: string) => void;
   onChartUpload: (charts: Array<{ file: File; timeframe: string }>) => void;
   isAnalyzing: boolean;
+  token: string;
 }) {
   const [selectedStrategyFile, setSelectedStrategyFile] = useState<File | null>(null);
   const [comments, setComments] = useState('');
@@ -549,6 +595,7 @@ function UploadSection({
   const [showTradingViewInput, setShowTradingViewInput] = useState(false);
   const [loadingTradingView, setLoadingTradingView] = useState(false);
   const [tradingViewError, setTradingViewError] = useState<string | null>(null);
+  const [pasteSuccess, setPasteSuccess] = useState(false);
 
   const handleStrategySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -567,6 +614,43 @@ function UploadSection({
     }));
     setCharts(prev => [...prev, ...newCharts]);
     e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    let pastedImage = false;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+
+      // Check if the item is an image
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        pastedImage = true;
+
+        const blob = item.getAsFile();
+        if (blob) {
+          // Create a proper File object with a name
+          const timestamp = new Date().getTime();
+          const extension = blob.type.split('/')[1] || 'png';
+          const file = new File([blob], `pasted-chart-${timestamp}.${extension}`, { type: blob.type });
+
+          const previewUrl = URL.createObjectURL(file);
+          setCharts(prev => [...prev, {
+            file,
+            previewUrl,
+            timeframe: '',
+          }]);
+        }
+      }
+    }
+
+    if (pastedImage) {
+      setPasteSuccess(true);
+      setTimeout(() => setPasteSuccess(false), 2000);
+    }
   };
 
   const hasStrategy = strategyAnalysis !== null && strategyAnalysis.length > 0;
@@ -590,7 +674,10 @@ function UploadSection({
     try {
       const response = await fetch('/api/tradingview/get-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ url: tradingViewUrl }),
       });
 
@@ -628,7 +715,7 @@ function UploadSection({
   };
 
   return (
-    <div className="px-3 sm:px-6 py-2 sm:py-3 bg-muted/30">
+    <div className="px-3 sm:px-6 py-2 sm:py-3 bg-muted/30" onPaste={hasStrategy ? handlePaste : undefined}>
       {!hasStrategy ? (
         <div className="space-y-2">
           {/* Compact button row - horizontal layout */}
@@ -721,6 +808,14 @@ function UploadSection({
                 </div>
               </Button>
             </label>
+
+            <span className="text-xs text-muted-foreground hidden sm:inline">or paste images</span>
+
+            {pasteSuccess && (
+              <span className="text-xs text-green-600 font-medium animate-in fade-in">
+                ✓ Image pasted
+              </span>
+            )}
 
             <div className="hidden sm:block h-4 w-px bg-border" />
 

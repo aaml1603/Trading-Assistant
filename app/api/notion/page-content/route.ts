@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from '@notionhq/client';
-import { cookies } from 'next/headers';
+import { ObjectId } from 'mongodb';
+import { getDb } from '@/lib/mongodb';
+import { COLLECTIONS, User } from '@/lib/models';
+import { getUserFromRequest } from '@/lib/auth';
 
 interface RichText {
   plain_text: string;
@@ -91,16 +94,27 @@ async function getBlockContent(notion: Client, blockId: string): Promise<string>
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get('notion_access_token')?.value;
+    const user = getUserFromRequest(request);
 
-    if (!accessToken) {
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const db = await getDb();
+    const usersCollection = db.collection<User>(COLLECTIONS.USERS);
+    const dbUser = await usersCollection.findOne({ _id: new ObjectId(user.userId) });
+
+    if (!dbUser?.notionAccessToken) {
       return NextResponse.json(
         { error: 'Not connected to Notion' },
         { status: 401 }
       );
     }
 
+    const accessToken = dbUser.notionAccessToken;
     const { pageId } = await request.json();
 
     if (!pageId) {
