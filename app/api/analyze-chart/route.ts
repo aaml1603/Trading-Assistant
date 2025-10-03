@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
 // Configure route for potentially long-running requests
-export const maxDuration = 60; // 1 minute for chart analysis
+export const maxDuration = 300; // 5 minutes for chart analysis
 export const dynamic = 'force-dynamic';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
-  timeout: 60000, // 1 minute timeout for chart analysis
+  timeout: 300000, // 5 minutes timeout for chart analysis
 });
 
 export async function POST(request: NextRequest) {
@@ -138,8 +138,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error analyzing chart:', error);
+
+    // Return detailed error for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Failed to analyze chart';
     return NextResponse.json(
-      { error: 'Failed to analyze chart' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

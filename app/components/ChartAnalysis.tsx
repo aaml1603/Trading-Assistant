@@ -156,7 +156,7 @@ export default function ChartAnalysis({ strategy, hasStrategy }: ChartAnalysisPr
       </div>
 
       {/* Chart List */}
-      {charts.length > 0 && !isAnalyzing && (
+      {charts.length > 0 && !isAnalyzing && !analysis && (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-gray-700">Uploaded Charts ({charts.length})</h4>
@@ -231,15 +231,33 @@ export default function ChartAnalysis({ strategy, hasStrategy }: ChartAnalysisPr
       )}
 
       {/* Error State */}
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-3">
-          <svg className="w-5 h-5 text-red-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-          </svg>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-red-800">Analysis Failed</p>
-            <p className="text-sm text-red-600 mt-1">{error}</p>
+      {error && !isAnalyzing && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-start space-x-3">
+            <svg className="w-5 h-5 text-red-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-800">Analysis Failed</p>
+              <p className="text-sm text-red-600 mt-1">{error}</p>
+            </div>
           </div>
+          {charts.length > 0 && (
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={handleAnalyze}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Retry Analysis
+              </button>
+              <button
+                onClick={() => setError(null)}
+                className="px-4 py-2 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
         </div>
       )}
 

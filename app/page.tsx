@@ -15,8 +15,9 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link } from 'lucide-react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check } from 'lucide-react';
 import { type FormEventHandler, useCallback, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import NotionConnect from './components/NotionConnect';
 import { ThemeToggle } from './components/theme-toggle';
 import {
@@ -87,11 +88,39 @@ const exportConversation = (messages: ChatMessage[], format: 'json' | 'markdown'
   URL.revokeObjectURL(url);
 };
 
+// Strip markdown formatting for plain text copy
+const stripMarkdown = (markdown: string): string => {
+  return markdown
+    // Remove headers
+    .replace(/#{1,6}\s+/g, '')
+    // Remove bold/italic
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    // Remove links but keep text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Remove images
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
+    // Remove inline code
+    .replace(/`([^`]+)`/g, '$1')
+    // Remove code blocks
+    .replace(/```[\s\S]*?```/g, '')
+    // Remove blockquotes
+    .replace(/^\s*>\s+/gm, '')
+    // Remove horizontal rules
+    .replace(/^(-{3,}|_{3,}|\*{3,})$/gm, '')
+    // Remove list markers
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    // Clean up extra whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n1. Click **Upload PDF** to upload your trading strategy document\n2. Add optional context or notes about your strategy\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n1. Click **Notion** to connect your workspace\n2. Browse and select your strategy document\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n- Simply type your trading questions in the chat below\n- Ask about strategy development, risk management, technical analysis, etc.\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n- Paste TradingView snapshot links directly instead of downloading screenshots\n- Add context when uploading strategies for more tailored analysis\n- Use the chat to ask follow-up questions about any analysis\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
+      content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n---\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n---\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n\n1. Click **Upload PDF** to upload your trading strategy document\n\n2. Add optional context or notes about your strategy\n\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n\n1. Click **Notion** to connect your workspace\n\n2. Browse and select your strategy document\n\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n\n- Simply type your trading questions in the chat below\n\n- Ask about strategy development, risk management, technical analysis, etc.\n\n---\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n---\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n\n- Paste TradingView snapshot links directly instead of downloading screenshots\n\n- Add context when uploading strategies for more tailored analysis\n\n- Use the chat to ask follow-up questions about any analysis\n\n---\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
       role: 'assistant',
       timestamp: new Date(),
     }
@@ -102,6 +131,7 @@ export default function Home() {
   const [strategyText, setStrategyText] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [chartImages, setChartImages] = useState<Array<{ base64: string; mimeType: string; timeframe: string }>>([]);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   // Strategy upload handler
   const handleStrategyUpload = useCallback(async (file: File, comments?: string) => {
@@ -270,7 +300,7 @@ export default function Home() {
     setMessages([
       {
         id: '1',
-        content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n1. Click **Upload PDF** to upload your trading strategy document\n2. Add optional context or notes about your strategy\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n1. Click **Notion** to connect your workspace\n2. Browse and select your strategy document\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n- Simply type your trading questions in the chat below\n- Ask about strategy development, risk management, technical analysis, etc.\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n- Paste TradingView snapshot links directly instead of downloading screenshots\n- Add context when uploading strategies for more tailored analysis\n- Use the chat to ask follow-up questions about any analysis\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
+        content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n---\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n---\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n\n1. Click **Upload PDF** to upload your trading strategy document\n\n2. Add optional context or notes about your strategy\n\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n\n1. Click **Notion** to connect your workspace\n\n2. Browse and select your strategy document\n\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n\n- Simply type your trading questions in the chat below\n\n- Ask about strategy development, risk management, technical analysis, etc.\n\n---\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n---\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n\n- Paste TradingView snapshot links directly instead of downloading screenshots\n\n- Add context when uploading strategies for more tailored analysis\n\n- Use the chat to ask follow-up questions about any analysis\n\n---\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
         role: 'assistant',
         timestamp: new Date(),
       }
@@ -343,32 +373,40 @@ export default function Home() {
     }
   }, [inputValue, isAnalyzing, strategyText, messages]);
 
+  const handleCopyMessage = useCallback((messageId: string, content: string) => {
+    const plainText = stripMarkdown(content);
+    navigator.clipboard.writeText(plainText).then(() => {
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    });
+  }, []);
+
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg sm:rounded-xl border bg-background shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between border-b bg-muted/50 px-2 sm:px-4 py-2 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="size-2 rounded-full bg-green-500" />
-            <span className="font-medium text-sm">AI Trading Assistant</span>
+            <span className="font-medium text-xs sm:text-sm">AI Trading Assistant</span>
           </div>
-          <div className="h-4 w-px bg-border" />
-          <span className="text-muted-foreground text-xs">
+          <div className="hidden sm:block h-4 w-px bg-border" />
+          <span className="hidden sm:block text-muted-foreground text-xs">
             Powered by House of Stocks
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2"
+                className="h-7 sm:h-8 px-1.5 sm:px-2"
                 disabled={messages.length <= 1}
               >
-                <Download className="size-4" />
-                <span className="ml-1">Export</span>
+                <Download className="size-3.5 sm:size-4" />
+                <span className="ml-1 hidden sm:inline">Export</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -387,10 +425,10 @@ export default function Home() {
             variant="ghost"
             size="sm"
             onClick={handleReset}
-            className="h-8 px-2"
+            className="h-7 sm:h-8 px-1.5 sm:px-2"
           >
-            <RotateCcwIcon className="size-4" />
-            <span className="ml-1">Reset</span>
+            <RotateCcwIcon className="size-3.5 sm:size-4" />
+            <span className="ml-1 hidden sm:inline">Reset</span>
           </Button>
         </div>
       </div>
@@ -399,7 +437,7 @@ export default function Home() {
       <Conversation className="flex-1 min-h-0">
         <ConversationContent className="space-y-4">
           {messages.map((message) => (
-            <div key={message.id} className="space-y-3">
+            <div key={message.id} className="space-y-3 group">
               <Message from={message.role}>
                 <MessageContent>
                   {message.isStreaming && message.content === '' ? (
@@ -414,8 +452,29 @@ export default function Home() {
                         </span>
                       )}
                     </div>
-                  ) : (
+                  ) : message.role === 'user' ? (
+                    // User messages - simple text, no markdown rendering
                     message.content
+                  ) : (
+                    // Assistant messages - render markdown with copy button
+                    <div className="relative">
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-sm sm:text-base">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute -top-1 -right-1 h-6 w-6 sm:h-7 sm:w-7 p-0 opacity-0 sm:group-hover:opacity-100 transition-opacity touch-manipulation active:opacity-100"
+                        onClick={() => handleCopyMessage(message.id, message.content)}
+                        title="Copy response"
+                      >
+                        {copiedMessageId === message.id ? (
+                          <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-600" />
+                        ) : (
+                          <Copy className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                        )}
+                      </Button>
+                    </div>
                   )}
                 </MessageContent>
                 <MessageAvatar
@@ -439,22 +498,23 @@ export default function Home() {
         />
 
         {/* Text Input for Conversation */}
-        <div className="border-t px-6 py-3">
+        <div className="border-t px-3 sm:px-6 py-2 sm:py-3">
           <PromptInput onSubmit={handleSubmit}>
             <PromptInputTextarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={
                 strategyText
-                  ? "Ask follow-up questions... (Press Enter to send, Shift+Enter for new line)"
-                  : "Ask me anything about trading strategies... (Press Enter to send)"
+                  ? "Ask follow-up questions..."
+                  : "Ask me anything about trading..."
               }
               disabled={isAnalyzing}
               rows={2}
+              className="text-sm sm:text-base"
             />
             <PromptInputToolbar>
               <PromptInputTools>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs sm:text-xs text-muted-foreground hidden sm:block">
                   {strategyText ? '✓ Strategy loaded • Chat enabled' : 'General trading questions'}
                 </span>
               </PromptInputTools>
@@ -568,7 +628,7 @@ function UploadSection({
   };
 
   return (
-    <div className="px-6 py-3 bg-muted/30">
+    <div className="px-3 sm:px-6 py-2 sm:py-3 bg-muted/30">
       {!hasStrategy ? (
         <div className="space-y-2">
           {/* Compact button row - horizontal layout */}
@@ -586,18 +646,18 @@ function UploadSection({
                 type="button"
                 variant="default"
                 size="sm"
-                className="h-8"
+                className="h-7 sm:h-8 text-xs"
                 disabled={isAnalyzing}
                 asChild
               >
                 <div className="cursor-pointer">
-                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  <FileText className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   <span className="text-xs">Upload PDF</span>
                 </div>
               </Button>
             </label>
 
-            <div className="h-4 w-px bg-border" />
+            <div className="hidden sm:block h-4 w-px bg-border" />
 
             {/* Notion Integration - Inline */}
             <NotionConnect
@@ -627,7 +687,7 @@ function UploadSection({
                 }}
                 disabled={isAnalyzing}
                 size="sm"
-                className="w-full h-8"
+                className="w-full h-8 text-xs sm:text-sm"
               >
                 Analyze Strategy
               </Button>
@@ -651,29 +711,30 @@ function UploadSection({
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="h-8"
+                className="h-7 sm:h-8 text-xs"
                 disabled={isAnalyzing}
                 asChild
               >
                 <div className="cursor-pointer">
-                  <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
-                  <span className="text-xs">{charts.length > 0 ? `Add More (${charts.length})` : 'Upload Charts'}</span>
+                  <ImageIcon className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <span className="text-xs">{charts.length > 0 ? `Add (${charts.length})` : 'Charts'}</span>
                 </div>
               </Button>
             </label>
 
-            <div className="h-4 w-px bg-border" />
+            <div className="hidden sm:block h-4 w-px bg-border" />
 
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8"
+              className="h-7 sm:h-8 text-xs"
               disabled={isAnalyzing || loadingTradingView}
               onClick={() => setShowTradingViewInput(!showTradingViewInput)}
             >
-              <Link className="mr-1.5 h-3.5 w-3.5" />
-              <span className="text-xs">TradingView Link</span>
+              <Link className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="text-xs hidden sm:inline">TradingView Link</span>
+              <span className="text-xs sm:hidden">TV Link</span>
             </Button>
           </div>
 
@@ -725,8 +786,8 @@ function UploadSection({
           {charts.length > 0 && (
             <div className="space-y-1.5 rounded-lg border bg-muted/50 p-2">
               {charts.map((chart, index) => (
-                <div key={index} className="flex items-center gap-2 rounded-md border bg-background p-1.5">
-                  <img src={chart.previewUrl} alt="" className="h-10 w-10 rounded object-cover" />
+                <div key={index} className="flex items-center gap-1.5 sm:gap-2 rounded-md border bg-background p-1.5">
+                  <img src={chart.previewUrl} alt="" className="h-8 w-8 sm:h-10 sm:w-10 rounded object-cover" />
                   <input
                     type="text"
                     value={chart.timeframe}
@@ -736,12 +797,12 @@ function UploadSection({
                       setCharts(newCharts);
                     }}
                     placeholder="e.g., 1H"
-                    className="flex-1 rounded-md border bg-background px-2 py-1 text-xs"
+                    className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs"
                   />
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 w-7 p-0"
+                    className="h-6 w-6 sm:h-7 sm:w-7 p-0 text-xs"
                     onClick={() => {
                       URL.revokeObjectURL(chart.previewUrl);
                       setCharts(charts.filter((_, i) => i !== index));
@@ -759,7 +820,7 @@ function UploadSection({
                 }}
                 disabled={isAnalyzing || charts.some(c => !c.timeframe.trim())}
                 size="sm"
-                className="w-full h-8"
+                className="w-full h-8 text-xs sm:text-sm"
               >
                 {charts.some(c => !c.timeframe.trim()) ? 'Specify Timeframes' : 'Analyze Charts'}
               </Button>
