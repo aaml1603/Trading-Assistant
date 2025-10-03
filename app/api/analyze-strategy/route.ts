@@ -77,7 +77,7 @@ Also extract the full text content of the strategy for future reference.`;
 
     // Analyze the strategy using Claude (timeout configured at client level)
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4096,
       messages: [
         {
