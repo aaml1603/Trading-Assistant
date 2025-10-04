@@ -36,84 +36,62 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the analysis prompt with optional additional comments
-    let analysisPrompt = `You are a trading strategy analyzer. IMPORTANT: Respond in the same language as the content of the document provided. Please analyze the trading strategy document provided and extract the key rules, entry criteria, exit criteria, and risk management guidelines. Provide a clear, structured summary that can be used to evaluate chart setups.`;
-
-    if (additionalComments && additionalComments.trim()) {
-      analysisPrompt += `\n\nThe user has provided additional context:\n${additionalComments}\n\nPlease incorporate this additional information into your analysis.`;
-    }
-
-    analysisPrompt += `\n\nPlease provide:
-1. Strategy Name/Type
-2. Key Entry Rules
-3. Key Exit Rules
-4. Risk Management Rules
-5. Important Notes or Conditions
-
-Also extract the full text content of the strategy for future reference.`;
-
-    let messageContent: Array<
-      | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
-      | { type: 'text'; text: string }
-    >;
+    // Extract strategy content without analysis
+    let strategyContent = '';
 
     // Check if it's a text file (from Notion) or PDF
     if (pdfFile.type === 'text/plain') {
       // Handle text content from Notion
-      const textContent = await pdfFile.text();
-      messageContent = [
-        {
-          type: 'text' as const,
-          text: `Here is the trading strategy:\n\n${textContent}\n\n${analysisPrompt}`,
-        },
-      ];
+      strategyContent = await pdfFile.text();
     } else {
-      // Handle PDF files
+      // Handle PDF files - extract text using Claude
       const arrayBuffer = await pdfFile.arrayBuffer();
       const base64Pdf = Buffer.from(arrayBuffer).toString('base64');
 
-      messageContent = [
-        {
-          type: 'document' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: 'application/pdf' as const,
-            data: base64Pdf,
+      const extractionMessage = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 16384,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document' as const,
+                source: {
+                  type: 'base64' as const,
+                  media_type: 'application/pdf' as const,
+                  data: base64Pdf,
+                },
+              },
+              {
+                type: 'text' as const,
+                text: 'Extract all text content from this document. Return only the text, no analysis or commentary.',
+              },
+            ],
           },
-        },
-        {
-          type: 'text' as const,
-          text: analysisPrompt,
-        },
-      ];
+        ],
+      });
+
+      strategyContent = extractionMessage.content[0].type === 'text' ? extractionMessage.content[0].text : '';
     }
 
-    // Analyze the strategy using Claude (timeout configured at client level)
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: messageContent,
-        },
-      ],
-    });
+    console.log('Strategy content extracted, length:', strategyContent.length);
 
-    const analysis = message.content[0].type === 'text' ? message.content[0].text : '';
+    // Create a simple confirmation message
+    const strategyName = pdfFile.name.replace(/\.(pdf|txt)$/i, '');
+    const analysis = `**Strategy loaded: ${strategyName}**\n\nYour strategy is now in context${additionalComments ? ' with your additional notes' : ''}. You can now upload charts for analysis or ask questions about your strategy.`;
 
     // Save strategy to MongoDB
     const db = await getDb();
     const strategiesCollection = db.collection<Strategy>(COLLECTIONS.STRATEGIES);
 
-    const strategyName = pdfFile.name.replace(/\.(pdf|txt)$/i, '');
     const now = new Date();
 
     const newStrategy: Strategy = {
       userId: new ObjectId(user.userId),
       name: strategyName,
       analysis,
-      strategyText: analysis,
+      strategyText: strategyContent,
       fileType: pdfFile.type,
       additionalComments: additionalComments || undefined,
       createdAt: now,
@@ -125,7 +103,7 @@ Also extract the full text content of the strategy for future reference.`;
     return NextResponse.json({
       success: true,
       analysis,
-      strategyText: analysis,
+      strategyText: strategyContent,
       strategyId: result.insertedId.toString(),
     });
   } catch (error) {

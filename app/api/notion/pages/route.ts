@@ -31,6 +31,10 @@ export async function GET(request: NextRequest) {
 
     const notion = new Client({ auth: accessToken });
 
+    // Get cursor from query params for pagination
+    const { searchParams } = new URL(request.url);
+    const startCursor = searchParams.get('cursor');
+
     // Search for pages
     const response = await notion.search({
       filter: {
@@ -42,6 +46,7 @@ export async function GET(request: NextRequest) {
         timestamp: 'last_edited_time',
       },
       page_size: 100,
+      ...(startCursor && { start_cursor: startCursor }),
     });
 
     console.log('Notion search results:', JSON.stringify(response, null, 2));
@@ -79,6 +84,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       pages,
+      hasMore: response.has_more,
+      nextCursor: response.next_cursor || null,
       debug: {
         totalResults: response.results.length,
         hasMore: response.has_more,

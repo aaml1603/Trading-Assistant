@@ -15,7 +15,7 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut } from 'lucide-react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X } from 'lucide-react';
 import { type FormEventHandler, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import NotionConnect from './components/NotionConnect';
@@ -162,7 +162,7 @@ function TradingAssistant() {
     const userMsgId = Date.now().toString();
     setMessages(prev => [...prev, {
       id: userMsgId,
-      content: `📄 Uploaded strategy: **${file.name}**${comments ? `\n\nAdditional context:\n${comments}` : ''}`,
+      content: `Uploaded strategy: **${file.name}**${comments ? `\n\nAdditional context:\n${comments}` : ''}`,
       role: 'user',
       timestamp: new Date(),
       type: 'strategy',
@@ -227,7 +227,7 @@ function TradingAssistant() {
 
       setMessages(prev => prev.map(msg =>
         msg.id === streamingMsgId
-          ? { ...msg, content: `❌ Error: ${errorMessage}`, isStreaming: false }
+          ? { ...msg, content: `Error: ${errorMessage}`, isStreaming: false }
           : msg
       ));
     } finally {
@@ -252,7 +252,7 @@ function TradingAssistant() {
 
     setMessages(prev => [...prev, {
       id: userMsgId,
-      content: `📊 Uploaded ${charts.length} chart${charts.length > 1 ? 's' : ''}: **${timeframesList}**`,
+      content: `Uploaded ${charts.length} chart${charts.length > 1 ? 's' : ''}: **${timeframesList}**`,
       role: 'user',
       timestamp: new Date(),
       type: 'chart',
@@ -318,7 +318,7 @@ function TradingAssistant() {
     } catch (err) {
       setMessages(prev => prev.map(msg =>
         msg.id === streamingMsgId
-          ? { ...msg, content: `❌ Error: ${err instanceof Error ? err.message : 'Failed to analyze charts'}`, isStreaming: false }
+          ? { ...msg, content: `Error: ${err instanceof Error ? err.message : 'Failed to analyze charts'}`, isStreaming: false }
           : msg
       ));
     } finally {
@@ -398,7 +398,7 @@ function TradingAssistant() {
     } catch (err) {
       setMessages(prev => prev.map(msg =>
         msg.id === streamingMsgId
-          ? { ...msg, content: `❌ Error: ${err instanceof Error ? err.message : 'Failed to get response'}`, isStreaming: false }
+          ? { ...msg, content: `Error: ${err instanceof Error ? err.message : 'Failed to get response'}`, isStreaming: false }
           : msg
       ));
     } finally {
@@ -558,9 +558,16 @@ function TradingAssistant() {
             />
             <PromptInputToolbar>
               <PromptInputTools>
-                <span className="text-xs sm:text-xs text-muted-foreground hidden sm:block">
-                  {strategyText ? '✓ Strategy loaded • Chat enabled' : 'General trading questions'}
-                </span>
+                {strategyText ? (
+                  <span className="text-xs sm:text-xs text-muted-foreground hidden sm:flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    Strategy loaded • Chat enabled
+                  </span>
+                ) : (
+                  <span className="text-xs sm:text-xs text-muted-foreground hidden sm:block">
+                    General trading questions
+                  </span>
+                )}
               </PromptInputTools>
               <PromptInputSubmit
                 disabled={!inputValue.trim() || isAnalyzing}
@@ -812,8 +819,9 @@ function UploadSection({
             <span className="text-xs text-muted-foreground hidden sm:inline">or paste images</span>
 
             {pasteSuccess && (
-              <span className="text-xs text-green-600 font-medium animate-in fade-in">
-                ✓ Image pasted
+              <span className="text-xs text-green-600 font-medium animate-in fade-in flex items-center gap-1">
+                <Check className="h-3 w-3" />
+                Image pasted
               </span>
             )}
 
@@ -903,7 +911,7 @@ function UploadSection({
                       setCharts(charts.filter((_, i) => i !== index));
                     }}
                   >
-                    ✕
+                    <X className="h-3 w-3" />
                   </Button>
                 </div>
               ))}

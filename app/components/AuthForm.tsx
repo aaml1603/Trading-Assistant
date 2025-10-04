@@ -12,10 +12,43 @@ export default function AuthForm() {
   const [isLoading, setIsLoading] = useState(false);
   const { login, register } = useAuth();
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password: string): string | null => {
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters long';
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least 1 uppercase letter';
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      return 'Password must contain at least 1 symbol';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+
+    // Validate email
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate password
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       if (isLogin) {
@@ -69,7 +102,7 @@ export default function AuthForm() {
               required
               minLength={6}
               className="w-full px-3 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder={isLogin ? '••••••••' : 'Minimum 6 characters'}
+              placeholder={isLogin ? '••••••••' : '6+ chars, 1 uppercase, 1 symbol'}
               disabled={isLoading}
             />
           </div>

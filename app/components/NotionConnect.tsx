@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Check, Loader2, LogOut } from 'lucide-react';
+import { Check, Loader2, LogOut, Plus } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -25,6 +25,8 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
   const [showPageList, setShowPageList] = useState(false);
   const [loadingPageId, setLoadingPageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const isConnected = !!user?.notionConnected;
   const workspaceName = user?.notionWorkspaceName;
@@ -78,16 +80,22 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       setPages([]);
       setShowPageList(false);
       setError(null);
+      setHasMore(false);
+      setNextCursor(null);
     } catch {
       setError('Failed to disconnect');
     }
   };
 
-  const fetchPages = async () => {
+  const fetchPages = async (cursor?: string | null) => {
     setLoadingPages(true);
     setError(null);
     try {
-      const response = await fetch('/api/notion/pages', {
+      const url = cursor
+        ? `/api/notion/pages?cursor=${encodeURIComponent(cursor)}`
+        : '/api/notion/pages';
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -104,7 +112,10 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
         console.log('Debug info:', data.debug);
       }
 
-      setPages(data.pages || []);
+      // If cursor exists, append to existing pages; otherwise, replace
+      setPages(prev => cursor ? [...prev, ...(data.pages || [])] : (data.pages || []));
+      setHasMore(data.hasMore || false);
+      setNextCursor(data.nextCursor || null);
     } catch (err) {
       console.error('Error fetching pages:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch pages');
@@ -195,6 +206,18 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
           variant="ghost"
           size="sm"
           className="h-8 px-2"
+          onClick={handleConnect}
+          disabled={isAnalyzing}
+          title="Add more pages from Notion"
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          <span className="text-xs">Add Pages</span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2"
           onClick={() => {
             if (!showPageList && pages.length === 0) {
               fetchPages();
@@ -203,7 +226,7 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
           }}
           disabled={isAnalyzing || loadingPages}
         >
-          <span className="text-xs">{showPageList ? 'Hide Pages' : 'Browse Pages'}</span>
+          <span className="text-xs">{showPageList ? 'Hide' : 'Browse'}</span>
         </Button>
         <Button
           type="button"
@@ -220,7 +243,7 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       {/* Page list - shows above when open */}
       {showPageList && (
         <div className="absolute left-0 right-0 bottom-full mb-1 rounded-lg border bg-background p-2 space-y-1 max-h-[200px] overflow-y-auto shadow-lg z-50">
-          {loadingPages ? (
+          {loadingPages && pages.length === 0 ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
@@ -229,26 +252,43 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
               No pages found
             </p>
           ) : (
-            pages.map((page) => (
-              <button
-                key={page.id}
-                onClick={() => handlePageSelect(page.id)}
-                disabled={loadingPageId !== null || isAnalyzing}
-                className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50 border"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{page.title}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {new Date(page.lastEdited).toLocaleDateString()}
-                    </p>
+            <>
+              {pages.map((page) => (
+                <button
+                  key={page.id}
+                  onClick={() => handlePageSelect(page.id)}
+                  disabled={loadingPageId !== null || isAnalyzing}
+                  className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50 border"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{page.title}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(page.lastEdited).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {loadingPageId === page.id && (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    )}
                   </div>
-                  {loadingPageId === page.id && (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  )}
-                </div>
-              </button>
-            ))
+                </button>
+              ))}
+              {hasMore && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 mt-2"
+                  onClick={() => fetchPages(nextCursor)}
+                  disabled={loadingPages || isAnalyzing}
+                >
+                  {loadingPages ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  ) : null}
+                  <span className="text-xs">Load More Pages</span>
+                </Button>
+              )}
+            </>
           )}
         </div>
       )}

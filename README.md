@@ -10,6 +10,7 @@ An AI-powered trading assistant that analyzes your trading strategies and chart 
 - **Real-time Feedback**: Get instant analysis results with confidence levels and recommendations
 
 ## Setup
+## Change
 
 1. Install dependencies:
 ```bash

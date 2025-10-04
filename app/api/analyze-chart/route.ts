@@ -77,40 +77,33 @@ export async function POST(request: NextRequest) {
     });
 
     // Build the analysis prompt
-    let analysisPrompt = `You are a professional trading analyst. IMPORTANT: Respond in the same language as the trading strategy content provided below. I'm providing ${charts.length} chart screenshot${charts.length > 1 ? 's' : ''} for analysis across different timeframes:\n\n`;
+    let analysisPrompt = `IMPORTANT: Respond in the same language as the strategy. Analyze ${charts.length} chart${charts.length > 1 ? 's' : ''}:\n\n`;
 
     charts.forEach((chart, index) => {
-      analysisPrompt += `**Chart ${index + 1}**: ${chart.timeframe}\n`;
+      analysisPrompt += `Chart ${index + 1}: ${chart.timeframe}\n`;
     });
 
-    analysisPrompt += `\n**Trading Strategy:**\n${strategy}\n\n`;
+    analysisPrompt += `\n**Strategy:**\n${strategy}\n\n`;
 
     if (charts.length > 1) {
-      analysisPrompt += `Please analyze ALL charts together, considering the multi-timeframe perspective, and provide:\n\n`;
-      analysisPrompt += `1. **Multi-Timeframe Analysis**: How do the different timeframes align or conflict?\n`;
-      analysisPrompt += `2. **Entry Signal**: YES or NO - Is there a valid entry based on the strategy across all timeframes?\n`;
-      analysisPrompt += `3. **Confidence Level**: High, Medium, or Low\n`;
-      analysisPrompt += `4. **Key Observations**: What patterns, indicators, or price action do you see on each timeframe?\n`;
-      analysisPrompt += `5. **Entry Criteria Met**: Which specific strategy rules are satisfied across the timeframes?\n`;
-      analysisPrompt += `6. **Entry Criteria Not Met**: Which rules are missing or not satisfied?\n`;
-      analysisPrompt += `7. **Timeframe Alignment**: Are the timeframes confirming each other or showing divergence?\n`;
-      analysisPrompt += `8. **Recommendations**: Should the trader take this setup? Any warnings or considerations?\n`;
-      analysisPrompt += `9. **Entry Price**: If applicable, suggest an entry price\n`;
-      analysisPrompt += `10. **Stop Loss**: If applicable, suggest a stop loss level\n`;
-      analysisPrompt += `11. **Take Profit**: If applicable, suggest take profit targets\n\n`;
-      analysisPrompt += `Be specific about which timeframe shows which signal and reference the actual strategy rules provided.`;
+      analysisPrompt += `Provide BRIEF analysis:\n`;
+      analysisPrompt += `1. **Entry Signal**: YES/NO\n`;
+      analysisPrompt += `2. **Confidence**: High/Medium/Low\n`;
+      analysisPrompt += `3. **Timeframe Alignment**: Quick summary\n`;
+      analysisPrompt += `4. **Criteria Met**: Which strategy rules (bullets only)\n`;
+      analysisPrompt += `5. **Criteria Not Met**: Missing rules (bullets only)\n`;
+      analysisPrompt += `6. **Entry/SL/TP**: Price levels if applicable\n`;
+      analysisPrompt += `7. **Verdict**: Take it or not? (1-2 sentences)\n\n`;
+      analysisPrompt += `Keep it concise - no long explanations.`;
     } else {
-      analysisPrompt += `Please analyze the chart and provide:\n\n`;
-      analysisPrompt += `1. **Entry Signal**: YES or NO - Is there a valid entry based on the strategy?\n`;
-      analysisPrompt += `2. **Confidence Level**: High, Medium, or Low\n`;
-      analysisPrompt += `3. **Key Observations**: What patterns, indicators, or price action do you see?\n`;
-      analysisPrompt += `4. **Entry Criteria Met**: Which specific strategy rules are satisfied?\n`;
-      analysisPrompt += `5. **Entry Criteria Not Met**: Which rules are missing or not satisfied?\n`;
-      analysisPrompt += `6. **Recommendations**: Should the trader take this setup? Any warnings or considerations?\n`;
-      analysisPrompt += `7. **Entry Price**: If applicable, suggest an entry price\n`;
-      analysisPrompt += `8. **Stop Loss**: If applicable, suggest a stop loss level\n`;
-      analysisPrompt += `9. **Take Profit**: If applicable, suggest take profit targets\n\n`;
-      analysisPrompt += `Be specific and reference the actual strategy rules provided.`;
+      analysisPrompt += `Provide BRIEF analysis:\n`;
+      analysisPrompt += `1. **Entry Signal**: YES/NO\n`;
+      analysisPrompt += `2. **Confidence**: High/Medium/Low\n`;
+      analysisPrompt += `3. **Criteria Met**: Which strategy rules (bullets only)\n`;
+      analysisPrompt += `4. **Criteria Not Met**: Missing rules (bullets only)\n`;
+      analysisPrompt += `5. **Entry/SL/TP**: Price levels if applicable\n`;
+      analysisPrompt += `6. **Verdict**: Take it or not? (1-2 sentences)\n\n`;
+      analysisPrompt += `Keep it concise - no long explanations.`;
     }
 
     content.push({
@@ -121,7 +114,7 @@ export async function POST(request: NextRequest) {
     // Analyze the charts using Claude with vision
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4096,
+      max_tokens: 16384,
       messages: [
         {
           role: 'user',

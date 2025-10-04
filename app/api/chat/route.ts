@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('Chat request - Strategy length:', strategy?.length || 0);
+
     // Parse conversation history
     type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
     let conversationHistory: Array<{
@@ -59,14 +61,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Build system prompt
-    let systemPrompt = `You are an expert trading assistant helping traders analyze their strategies and make informed trading decisions. You provide clear, actionable advice based on trading principles and technical analysis. IMPORTANT: Always respond in the same language as the user's messages and strategy content.`;
+    let systemPrompt = `You are a trading assistant. Be CONCISE and DIRECT. Keep responses brief - 3-5 sentences max unless specifically asked for detail. Focus on actionable insights only. IMPORTANT: Always respond in the same language as the user's messages.`;
 
-    if (strategy) {
-      systemPrompt += `\n\nThe user has uploaded the following trading strategy:\n\n${strategy}\n\nUse this strategy as context when answering questions.`;
+    if (strategy && strategy.trim()) {
+      systemPrompt += `\n\nThe user has already uploaded their trading strategy. Here it is:\n\n${strategy}\n\nWhen the user asks about "my strategy" or to "explain my strategy", you are referring to THIS strategy above. You have it in context - explain it based on the content provided.`;
     }
 
     if (chartImages.length > 0) {
-      systemPrompt += `\n\nThe user has uploaded ${chartImages.length} chart image(s) for analysis. These charts show different timeframes: ${chartImages.map(c => c.timeframe).join(', ')}. Reference these charts when answering questions about the current market setup.`;
+      systemPrompt += `\n\nCharts available: ${chartImages.map(c => c.timeframe).join(', ')}. Reference when relevant.`;
     }
 
     // Build messages array
@@ -123,7 +125,7 @@ export async function POST(request: NextRequest) {
     // Get response from Claude
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 2048,
+      max_tokens: 8192,
       system: systemPrompt,
       messages,
     });
