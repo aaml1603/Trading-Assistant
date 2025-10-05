@@ -15,8 +15,8 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X } from 'lucide-react';
-import { type FormEventHandler, useCallback, useState } from 'react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X, MessageSquarePlus, Trash2, Menu } from 'lucide-react';
+import { type FormEventHandler, useCallback, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import NotionConnect from './components/NotionConnect';
 import { ThemeToggle } from './components/theme-toggle';
@@ -144,7 +144,7 @@ function TradingAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n---\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n---\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n\n1. Click **Upload PDF** to upload your trading strategy document\n\n2. Add optional context or notes about your strategy\n\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n\n1. Click **Notion** to connect your workspace\n\n2. Browse and select your strategy document\n\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n\n- Simply type your trading questions in the chat below\n\n- Ask about strategy development, risk management, technical analysis, etc.\n\n---\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n---\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n\n- Paste TradingView snapshot links directly instead of downloading screenshots\n\n- Add context when uploading strategies for more tailored analysis\n\n- Use the chat to ask follow-up questions about any analysis\n\n---\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
+      content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n---\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n\n- **Indicator Analysis**: Upload images of your indicators alongside charts for deeper technical analysis\n\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n---\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n\n1. Click **Upload PDF** to upload your trading strategy document\n\n2. Add optional context or notes about your strategy\n\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n\n1. Click **Notion** to connect your workspace\n\n2. Browse and select your strategy document\n\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n\n- Simply type your trading questions in the chat below\n\n- Ask about strategy development, risk management, technical analysis, etc.\n\n---\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n\n2. **Upload Charts & Indicators** → Add chart screenshots and indicator images to show market conditions\n\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n---\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n\n- **Include indicator screenshots** alongside your charts for more accurate analysis\n\n- Add context when uploading strategies for more tailored analysis\n\n- Use the chat to ask follow-up questions about any analysis\n\n---\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
       role: 'assistant',
       timestamp: new Date(),
     }
@@ -155,14 +155,193 @@ function TradingAssistant() {
   const [strategyText, setStrategyText] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [chartImages, setChartImages] = useState<Array<{ base64: string; mimeType: string; timeframe: string }>>([]);
+  const [indicatorImages, setIndicatorImages] = useState<Array<{ base64: string; mimeType: string }>>([]);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  // Conversation management
+  const [conversations, setConversations] = useState<Array<{ _id: string; title: string; updatedAt: Date; lastMessageAt: Date }>>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+
+  // Load all conversations
+  const loadConversations = useCallback(async () => {
+    try {
+      const response = await fetch('/api/conversations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setConversations(data.conversations);
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, [token]);
+
+  // Load a specific conversation
+  const loadConversation = useCallback(async (conversationId: string) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setMessages(data.conversation.messages || []);
+        setStrategyText(data.conversation.strategyText || '');
+        setStrategyAnalysis(data.conversation.strategyAnalysis || null);
+        setCurrentConversationId(conversationId);
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+    }
+  }, [token]);
+
+  // Create new conversation
+  const createNewConversation = useCallback(async () => {
+    try {
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'New Conversation' }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setCurrentConversationId(data.conversationId);
+        setMessages([{
+          id: '1',
+          content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n---\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n\n- **Indicator Analysis**: Upload images of your indicators alongside charts for deeper technical analysis\n\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n---\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n\n1. Click **Upload PDF** to upload your trading strategy document\n\n2. Add optional context or notes about your strategy\n\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n\n1. Click **Notion** to connect your workspace\n\n2. Browse and select your strategy document\n\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n\n- Simply type your trading questions in the chat below\n\n- Ask about strategy development, risk management, technical analysis, etc.\n\n---\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n\n2. **Upload Charts & Indicators** → Add chart screenshots and indicator images to show market conditions\n\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n---\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n\n- **Include indicator screenshots** alongside your charts for more accurate analysis\n\n- Add context when uploading strategies for more tailored analysis\n\n- Use the chat to ask follow-up questions about any analysis\n\n---\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
+          role: 'assistant',
+          timestamp: new Date(),
+        }]);
+        setStrategyText('');
+        setStrategyAnalysis(null);
+        setChartImages([]);
+        setIndicatorImages([]);
+        await loadConversations();
+      }
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+    }
+  }, [token, loadConversations]);
+
+  // Save current conversation
+  const saveConversation = useCallback(async () => {
+    if (!currentConversationId) return;
+
+    try {
+      await fetch(`/api/conversations/${currentConversationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages,
+          strategyText,
+          strategyAnalysis,
+        }),
+      });
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+    }
+  }, [currentConversationId, messages, strategyText, strategyAnalysis, token]);
+
+  // Delete conversation
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        if (currentConversationId === conversationId) {
+          await createNewConversation();
+        }
+        await loadConversations();
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  }, [token, currentConversationId, createNewConversation, loadConversations]);
+
+  // Load conversations on mount and create first conversation if needed
+  useEffect(() => {
+    if (token) {
+      loadConversations();
+    }
+  }, [token, loadConversations]);
+
+  // Create first conversation if none exist, or load first conversation if none is selected
+  useEffect(() => {
+    if (!loadingConversations) {
+      if (conversations.length === 0 && !currentConversationId) {
+        createNewConversation();
+      } else if (!currentConversationId && conversations.length > 0) {
+        loadConversation(conversations[0]._id);
+      }
+    }
+  }, [conversations, currentConversationId, loadConversation, loadingConversations, createNewConversation]);
+
+  // Auto-save conversation when messages change
+  useEffect(() => {
+    if (currentConversationId && messages.length > 1) {
+      const timeoutId = setTimeout(() => {
+        saveConversation();
+      }, 1000); // Debounce save by 1 second
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages, currentConversationId, saveConversation]);
+
+  // Helper function to generate AI title
+  const generateAndUpdateTitle = useCallback(async (conversationId: string, conversationMessages: ChatMessage[]) => {
+    try {
+      const response = await fetch('/api/conversations/generate-title', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: conversationMessages }),
+      });
+
+      if (response.ok) {
+        const { title } = await response.json();
+        await fetch(`/api/conversations/${conversationId}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ title }),
+        });
+        await loadConversations();
+      }
+    } catch (error) {
+      console.error('Error generating title:', error);
+    }
+  }, [token, loadConversations]);
 
   // Strategy upload handler
   const handleStrategyUpload = useCallback(async (file: File, comments?: string) => {
+    const isFirstMessage = messages.length === 1; // Only welcome message
     const userMsgId = Date.now().toString();
+    const userContent = `Uploaded strategy: **${file.name}**${comments ? `\n\nAdditional context:\n${comments}` : ''}`;
+
     setMessages(prev => [...prev, {
       id: userMsgId,
-      content: `Uploaded strategy: **${file.name}**${comments ? `\n\nAdditional context:\n${comments}` : ''}`,
+      content: userContent,
       role: 'user',
       timestamp: new Date(),
       type: 'strategy',
@@ -210,11 +389,28 @@ function TradingAssistant() {
       setStrategyAnalysis(data.analysis);
       setStrategyText(data.strategyText);
 
+      const assistantMessage: ChatMessage = {
+        id: streamingMsgId,
+        content: data.analysis,
+        role: 'assistant',
+        timestamp: new Date(),
+        isStreaming: false,
+        type: 'strategy',
+      };
+
       setMessages(prev => prev.map(msg =>
-        msg.id === streamingMsgId
-          ? { ...msg, content: data.analysis, isStreaming: false, type: 'strategy' }
-          : msg
+        msg.id === streamingMsgId ? assistantMessage : msg
       ));
+
+      // Generate AI title after first strategy upload
+      if (isFirstMessage && currentConversationId) {
+        const updatedMessages = [
+          ...messages,
+          { id: userMsgId, content: userContent, role: 'user' as const, timestamp: new Date(), type: 'strategy' as const, metadata: { fileName: file.name } },
+          assistantMessage,
+        ];
+        generateAndUpdateTitle(currentConversationId, updatedMessages);
+      }
     } catch (err) {
       let errorMessage = 'Failed to analyze strategy';
       if (err instanceof Error) {
@@ -233,10 +429,10 @@ function TradingAssistant() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, []);
+  }, [messages, currentConversationId, token, generateAndUpdateTitle]);
 
   // Chart upload handler
-  const handleChartUpload = useCallback(async (charts: Array<{ file: File; timeframe: string }>) => {
+  const handleChartUpload = useCallback(async (charts: Array<{ file: File; timeframe: string }>, indicators: File[]) => {
     if (!strategyText) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
@@ -247,12 +443,15 @@ function TradingAssistant() {
       return;
     }
 
+    const isFirstMessage = messages.length === 1; // Only welcome message
     const userMsgId = Date.now().toString();
     const timeframesList = charts.map(c => c.timeframe).join(', ');
+    const indicatorText = indicators.length > 0 ? ` and ${indicators.length} indicator image${indicators.length > 1 ? 's' : ''}` : '';
+    const userContent = `Uploaded ${charts.length} chart${charts.length > 1 ? 's' : ''}: **${timeframesList}**${indicatorText}`;
 
     setMessages(prev => [...prev, {
       id: userMsgId,
-      content: `Uploaded ${charts.length} chart${charts.length > 1 ? 's' : ''}: **${timeframesList}**`,
+      content: userContent,
       role: 'user',
       timestamp: new Date(),
       type: 'chart',
@@ -288,12 +487,32 @@ function TradingAssistant() {
 
       setChartImages(chartBase64Array);
 
+      // Convert indicators to base64 and store for future chat context
+      const indicatorBase64Array = await Promise.all(
+        indicators.map(async (indicator) => {
+          const arrayBuffer = await indicator.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          return {
+            base64,
+            mimeType: indicator.type,
+          };
+        })
+      );
+
+      setIndicatorImages(indicatorBase64Array);
+
       const formData = new FormData();
       charts.forEach((chart, index) => {
         formData.append(`chart_${index}`, chart.file);
         formData.append(`timeframe_${index}`, chart.timeframe);
       });
       formData.append('chartCount', charts.length.toString());
+
+      indicators.forEach((indicator, index) => {
+        formData.append(`indicator_${index}`, indicator);
+      });
+      formData.append('indicatorCount', indicators.length.toString());
+
       formData.append('strategy', strategyText);
 
       const response = await fetch('/api/analyze-chart', {
@@ -310,11 +529,38 @@ function TradingAssistant() {
         throw new Error(data.error || 'Failed to analyze charts');
       }
 
+      const assistantMessage: ChatMessage = {
+        id: streamingMsgId,
+        content: data.analysis,
+        role: 'assistant',
+        timestamp: new Date(),
+        isStreaming: false,
+        type: 'chart',
+      };
+
       setMessages(prev => prev.map(msg =>
-        msg.id === streamingMsgId
-          ? { ...msg, content: data.analysis, isStreaming: false, type: 'chart' }
-          : msg
+        msg.id === streamingMsgId ? assistantMessage : msg
       ));
+
+      // Generate AI title after first chart upload
+      if (isFirstMessage && currentConversationId) {
+        const updatedMessages = [
+          ...messages,
+          {
+            id: userMsgId,
+            content: userContent,
+            role: 'user' as const,
+            timestamp: new Date(),
+            type: 'chart' as const,
+            metadata: {
+              chartCount: charts.length,
+              timeframes: charts.map(c => c.timeframe),
+            },
+          },
+          assistantMessage,
+        ];
+        generateAndUpdateTitle(currentConversationId, updatedMessages);
+      }
     } catch (err) {
       setMessages(prev => prev.map(msg =>
         msg.id === streamingMsgId
@@ -324,23 +570,11 @@ function TradingAssistant() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [strategyText]);
+  }, [strategyText, messages, currentConversationId, token, generateAndUpdateTitle]);
 
   const handleReset = useCallback(() => {
-    setMessages([
-      {
-        id: '1',
-        content: "# Welcome to AI Trading Assistant! 👋\n\nI'm your AI-powered trading analysis companion, designed to help you make informed trading decisions by analyzing your strategies and charts.\n\n---\n\n## 🎯 What I Can Do\n\n- **Strategy Analysis**: Upload your trading strategy PDFs or import from Notion to get comprehensive analysis of your trading rules, entry/exit criteria, and risk management\n\n- **Chart Analysis**: Analyze multiple chart timeframes simultaneously to identify entry opportunities based on your strategy\n\n- **Conversational Support**: Ask questions about trading concepts, strategy refinement, or get clarification on analysis results\n\n- **Multi-Timeframe Analysis**: Compare different timeframes (1M, 5M, 15M, 1H, 4H, Daily, etc.) to confirm trade setups\n\n---\n\n## 📋 How to Get Started\n\n**Option 1: Strategy Analysis**\n\n1. Click **Upload PDF** to upload your trading strategy document\n\n2. Add optional context or notes about your strategy\n\n3. Review the AI analysis of your strategy rules and criteria\n\n**Option 2: Import from Notion**\n\n1. Click **Notion** to connect your workspace\n\n2. Browse and select your strategy document\n\n3. Get instant analysis of your Notion content\n\n**Option 3: General Questions**\n\n- Simply type your trading questions in the chat below\n\n- Ask about strategy development, risk management, technical analysis, etc.\n\n---\n\n## 📈 Complete Workflow\n\n1. **Upload Strategy** → I'll analyze and extract key trading rules\n\n2. **Upload Charts** → Add chart screenshots or paste TradingView snapshot links\n\n3. **Specify Timeframes** → Label each chart with its timeframe (e.g., \"1H\", \"4H\")\n\n4. **Get Analysis** → Receive detailed entry/exit recommendations based on your strategy\n\n5. **Ask Follow-ups** → Refine your understanding with additional questions\n\n---\n\n## 💡 Pro Tips\n\n- You can export your conversation at any time using the **Export** button in the header\n\n- Upload multiple charts at once for comprehensive multi-timeframe analysis\n\n- Paste TradingView snapshot links directly instead of downloading screenshots\n\n- Add context when uploading strategies for more tailored analysis\n\n- Use the chat to ask follow-up questions about any analysis\n\n---\n\n**Ready to start? Upload your strategy or ask me anything about trading!**",
-        role: 'assistant',
-        timestamp: new Date(),
-      }
-    ]);
-    setInputValue('');
-    setIsAnalyzing(false);
-    setStrategyAnalysis(null);
-    setStrategyText('');
-    setChartImages([]);
-  }, []);
+    createNewConversation();
+  }, [createNewConversation]);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(async (event) => {
     event.preventDefault();
@@ -349,6 +583,8 @@ function TradingAssistant() {
     const userMsgId = Date.now().toString();
     const userMessage = inputValue.trim();
     setInputValue('');
+
+    const isFirstMessage = messages.length === 1; // Only welcome message
 
     // Add user message
     setMessages(prev => [...prev, {
@@ -375,6 +611,7 @@ function TradingAssistant() {
       formData.append('strategy', strategyText || '');
       formData.append('conversationHistory', JSON.stringify(messages));
       formData.append('chartImages', JSON.stringify(chartImages));
+      formData.append('indicatorImages', JSON.stringify(indicatorImages));
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -390,11 +627,28 @@ function TradingAssistant() {
         throw new Error(data.error || 'Failed to get response');
       }
 
+      const assistantMessage: ChatMessage = {
+        id: streamingMsgId,
+        content: data.response,
+        role: 'assistant',
+        timestamp: new Date(),
+        isStreaming: false,
+        type: 'text',
+      };
+
       setMessages(prev => prev.map(msg =>
-        msg.id === streamingMsgId
-          ? { ...msg, content: data.response, isStreaming: false, type: 'text' }
-          : msg
+        msg.id === streamingMsgId ? assistantMessage : msg
       ));
+
+      // Generate AI title after first response
+      if (isFirstMessage && currentConversationId) {
+        const updatedMessages = [
+          ...messages,
+          { id: userMsgId, content: userMessage, role: 'user' as const, timestamp: new Date(), type: 'text' as const },
+          assistantMessage,
+        ];
+        generateAndUpdateTitle(currentConversationId, updatedMessages);
+      }
     } catch (err) {
       setMessages(prev => prev.map(msg =>
         msg.id === streamingMsgId
@@ -404,7 +658,7 @@ function TradingAssistant() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [inputValue, isAnalyzing, strategyText, messages]);
+  }, [inputValue, isAnalyzing, strategyText, messages, currentConversationId, token, loadConversations, generateAndUpdateTitle]);
 
   const handleCopyMessage = useCallback((messageId: string, content: string) => {
     const plainText = stripMarkdown(content);
@@ -415,21 +669,88 @@ function TradingAssistant() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg sm:rounded-xl border bg-background shadow-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b bg-muted/50 px-2 sm:px-4 py-2 sm:py-3">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="size-2 rounded-full bg-green-500" />
-            <span className="font-medium text-xs sm:text-sm">AI Trading Assistant</span>
-          </div>
-          <div className="hidden sm:block h-4 w-px bg-border" />
-          <span className="hidden sm:block text-muted-foreground text-xs">
-            {user?.email}
-          </span>
+    <div className="flex h-full w-full overflow-hidden rounded-lg sm:rounded-xl border bg-background shadow-sm">
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'flex' : 'hidden'} sm:flex flex-col w-64 border-r bg-muted/30 overflow-hidden`}>
+        <div className="flex items-center justify-between p-3 border-b">
+          <h2 className="font-semibold text-sm">Conversations</h2>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            onClick={createNewConversation}
+            title="New conversation"
+          >
+            <MessageSquarePlus className="h-4 w-4" />
+          </Button>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <ThemeToggle />
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {loadingConversations ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader size={16} />
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="text-xs text-muted-foreground text-center py-4">
+              No conversations yet
+            </div>
+          ) : (
+            conversations.map((conv) => (
+              <div
+                key={conv._id}
+                onClick={() => loadConversation(conv._id)}
+                className={`w-full text-left px-2 py-2 rounded text-xs hover:bg-muted/50 transition-colors group cursor-pointer ${
+                  currentConversationId === conv._id ? 'bg-muted' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between gap-1">
+                  <span className="flex-1 truncate font-medium">
+                    {conv.title}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(conv._id);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(conv.lastMessageAt).toLocaleDateString()}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex flex-col flex-1 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b bg-muted/50 px-2 sm:px-4 py-2 sm:py-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 sm:hidden"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="size-2 rounded-full bg-green-500" />
+              <span className="font-medium text-xs sm:text-sm">AI Trading Assistant</span>
+            </div>
+            <div className="hidden sm:block h-4 w-px bg-border" />
+            <span className="hidden sm:block text-muted-foreground text-xs">
+              {user?.email}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -577,6 +898,7 @@ function TradingAssistant() {
           </PromptInput>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -590,13 +912,14 @@ function UploadSection({
 }: {
   strategyAnalysis: string | null;
   onStrategyUpload: (file: File, comments?: string) => void;
-  onChartUpload: (charts: Array<{ file: File; timeframe: string }>) => void;
+  onChartUpload: (charts: Array<{ file: File; timeframe: string }>, indicators: File[]) => void;
   isAnalyzing: boolean;
   token: string;
 }) {
   const [selectedStrategyFile, setSelectedStrategyFile] = useState<File | null>(null);
   const [comments, setComments] = useState('');
   const [charts, setCharts] = useState<Array<{ file: File; previewUrl: string; timeframe: string }>>([]);
+  const [indicators, setIndicators] = useState<Array<{ file: File; previewUrl: string }>>([]);
   const [showComments, setShowComments] = useState(false);
   const [tradingViewUrl, setTradingViewUrl] = useState('');
   const [showTradingViewInput, setShowTradingViewInput] = useState(false);
@@ -620,6 +943,16 @@ function UploadSection({
       timeframe: '',
     }));
     setCharts(prev => [...prev, ...newCharts]);
+    e.target.value = '';
+  };
+
+  const handleIndicatorSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newIndicators = files.map(file => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setIndicators(prev => [...prev, ...newIndicators]);
     e.target.value = '';
   };
 
@@ -811,7 +1144,32 @@ function UploadSection({
               >
                 <div className="cursor-pointer">
                   <ImageIcon className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  <span className="text-xs">{charts.length > 0 ? `Add (${charts.length})` : 'Charts'}</span>
+                  <span className="text-xs">{charts.length > 0 ? `Charts (${charts.length})` : 'Charts'}</span>
+                </div>
+              </Button>
+            </label>
+
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleIndicatorSelect}
+              disabled={isAnalyzing}
+              className="hidden"
+              id="indicator-files"
+              multiple
+            />
+            <label htmlFor="indicator-files">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 sm:h-8 text-xs"
+                disabled={isAnalyzing}
+                asChild
+              >
+                <div className="cursor-pointer">
+                  <ImageIcon className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  <span className="text-xs">{indicators.length > 0 ? `Indicators (${indicators.length})` : 'Indicators'}</span>
                 </div>
               </Button>
             </label>
@@ -886,8 +1244,33 @@ function UploadSection({
             </div>
           )}
 
+          {indicators.length > 0 && (
+            <div className="space-y-1.5 rounded-lg border bg-muted/50 p-2">
+              <div className="text-xs font-medium text-muted-foreground px-1">Indicator Images</div>
+              <div className="flex flex-wrap gap-1.5">
+                {indicators.map((indicator, index) => (
+                  <div key={index} className="relative group">
+                    <img src={indicator.previewUrl} alt="" className="h-16 w-16 sm:h-20 sm:w-20 rounded object-cover border" />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="absolute -top-1 -right-1 h-5 w-5 p-0 bg-background/90 hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                        URL.revokeObjectURL(indicator.previewUrl);
+                        setIndicators(indicators.filter((_, i) => i !== index));
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {charts.length > 0 && (
             <div className="space-y-1.5 rounded-lg border bg-muted/50 p-2">
+              <div className="text-xs font-medium text-muted-foreground px-1">Charts with Timeframes</div>
               {charts.map((chart, index) => (
                 <div key={index} className="flex items-center gap-1.5 sm:gap-2 rounded-md border bg-background p-1.5">
                   <img src={chart.previewUrl} alt="" className="h-8 w-8 sm:h-10 sm:w-10 rounded object-cover" />
@@ -917,9 +1300,11 @@ function UploadSection({
               ))}
               <Button
                 onClick={() => {
-                  onChartUpload(charts.map(c => ({ file: c.file, timeframe: c.timeframe })));
+                  onChartUpload(charts.map(c => ({ file: c.file, timeframe: c.timeframe })), indicators.map(i => i.file));
                   charts.forEach(c => URL.revokeObjectURL(c.previewUrl));
+                  indicators.forEach(i => URL.revokeObjectURL(i.previewUrl));
                   setCharts([]);
+                  setIndicators([]);
                 }}
                 disabled={isAnalyzing || charts.some(c => !c.timeframe.trim())}
                 size="sm"

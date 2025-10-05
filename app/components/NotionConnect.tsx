@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Check, Loader2, LogOut, Plus } from 'lucide-react';
+import { Check, Loader2, LogOut, Plus, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -27,6 +27,7 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [showInitialWarning, setShowInitialWarning] = useState(false);
 
   const isConnected = !!user?.notionConnected;
   const workspaceName = user?.notionWorkspaceName;
@@ -38,6 +39,8 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       refreshUser(); // Refresh user to get updated Notion status
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
+      // Show initial warning after connecting
+      setTimeout(() => setShowInitialWarning(true), 500);
       return;
     }
 
@@ -45,7 +48,7 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
       setError('Failed to connect to Notion. Please try again.');
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, []);
+  }, [refreshUser]);
 
   const handleConnect = async () => {
     try {
@@ -168,6 +171,7 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
           className="h-8"
           onClick={handleConnect}
           disabled={isAnalyzing}
+          title="Connect to Notion (regular pages work best)"
         >
           <Image
             src="/logos/Notion_app_logo.png"
@@ -187,6 +191,25 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
 
   return (
     <div className="relative">
+      {/* Initial warning after connection */}
+      {showInitialWarning && (
+        <div className="absolute left-0 right-0 bottom-full mb-1 rounded-lg border border-amber-200 bg-amber-50 p-2 shadow-lg z-50">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-3 w-3 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-amber-800">
+              <p className="font-medium">Notion Connected!</p>
+              <p>Only regular pages work properly. Database tables and other page types may not display correctly.</p>
+              <button
+                onClick={() => setShowInitialWarning(false)}
+                className="mt-1 text-amber-700 hover:text-amber-900 underline"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Inline connected state */}
       <div className="flex items-center gap-1">
         <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded">
@@ -208,7 +231,7 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
           className="h-8 px-2"
           onClick={handleConnect}
           disabled={isAnalyzing}
-          title="Add more pages from Notion"
+          title="Add more pages from Notion (regular pages only)"
         >
           <Plus className="h-3 w-3 mr-1" />
           <span className="text-xs">Add Pages</span>
@@ -225,6 +248,7 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
             setShowPageList(!showPageList);
           }}
           disabled={isAnalyzing || loadingPages}
+          title="Browse pages from Notion (regular pages work best)"
         >
           <span className="text-xs">{showPageList ? 'Hide' : 'Browse'}</span>
         </Button>
@@ -242,54 +266,69 @@ export default function NotionConnect({ onPageSelected, isAnalyzing }: NotionCon
 
       {/* Page list - shows above when open */}
       {showPageList && (
-        <div className="absolute left-0 right-0 bottom-full mb-1 rounded-lg border bg-background p-2 space-y-1 max-h-[200px] overflow-y-auto shadow-lg z-50">
-          {loadingPages && pages.length === 0 ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <div className="absolute left-0 right-0 bottom-full mb-1 rounded-lg border bg-background p-2 space-y-1 shadow-lg z-50">
+          {/* Warning about page types */}
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-2 mb-2 flex-shrink-0">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-3 w-3 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-amber-800">
+                <p className="font-medium">Note:</p>
+                <p>Only regular pages work properly. Database tables and other page types may not display correctly.</p>
+              </div>
             </div>
-          ) : pages.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-3">
-              No pages found
-            </p>
-          ) : (
-            <>
-              {pages.map((page) => (
-                <button
-                  key={page.id}
-                  onClick={() => handlePageSelect(page.id)}
-                  disabled={loadingPageId !== null || isAnalyzing}
-                  className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50 border"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{page.title}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {new Date(page.lastEdited).toLocaleDateString()}
-                      </p>
+          </div>
+          
+          {/* Scrollable content area */}
+          <div className="max-h-[160px] overflow-y-auto space-y-1">
+          
+            {loadingPages && pages.length === 0 ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : pages.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">
+                No pages found
+              </p>
+            ) : (
+              <>
+                {pages.map((page) => (
+                  <button
+                    key={page.id}
+                    onClick={() => handlePageSelect(page.id)}
+                    disabled={loadingPageId !== null || isAnalyzing}
+                    className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50 border"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{page.title}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {new Date(page.lastEdited).toLocaleDateString()}
+                        </p>
+                      </div>
+                      {loadingPageId === page.id && (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      )}
                     </div>
-                    {loadingPageId === page.id && (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    )}
-                  </div>
-                </button>
-              ))}
-              {hasMore && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-8 mt-2"
-                  onClick={() => fetchPages(nextCursor)}
-                  disabled={loadingPages || isAnalyzing}
-                >
-                  {loadingPages ? (
-                    <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-                  ) : null}
-                  <span className="text-xs">Load More Pages</span>
-                </Button>
-              )}
-            </>
-          )}
+                  </button>
+                ))}
+                {hasMore && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-8 mt-2"
+                    onClick={() => fetchPages(nextCursor)}
+                    disabled={loadingPages || isAnalyzing}
+                  >
+                    {loadingPages ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                    ) : null}
+                    <span className="text-xs">Load More Pages</span>
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 

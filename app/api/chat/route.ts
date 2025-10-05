@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     const strategy = formData.get('strategy') as string;
     const conversationHistoryStr = formData.get('conversationHistory') as string;
     const chartImagesStr = formData.get('chartImages') as string;
+    const indicatorImagesStr = formData.get('indicatorImages') as string;
 
     if (!message) {
       return NextResponse.json(
@@ -60,6 +61,16 @@ export async function POST(request: NextRequest) {
       // If parsing fails, continue without charts
     }
 
+    // Parse indicator images if provided
+    let indicatorImages: Array<{ base64: string; mimeType: string }> = [];
+    try {
+      if (indicatorImagesStr) {
+        indicatorImages = JSON.parse(indicatorImagesStr);
+      }
+    } catch {
+      // If parsing fails, continue without indicators
+    }
+
     // Build system prompt
     let systemPrompt = `You are a trading assistant. Be CONCISE and DIRECT. Keep responses brief - 3-5 sentences max unless specifically asked for detail. Focus on actionable insights only. IMPORTANT: Always respond in the same language as the user's messages.`;
 
@@ -69,6 +80,10 @@ export async function POST(request: NextRequest) {
 
     if (chartImages.length > 0) {
       systemPrompt += `\n\nCharts available: ${chartImages.map(c => c.timeframe).join(', ')}. Reference when relevant.`;
+    }
+
+    if (indicatorImages.length > 0) {
+      systemPrompt += `\n\nIndicator images: ${indicatorImages.length} indicator screenshot${indicatorImages.length > 1 ? 's' : ''} available for analysis.`;
     }
 
     // Build messages array
@@ -85,12 +100,24 @@ export async function POST(request: NextRequest) {
       messages.push(...conversationHistory);
     }
 
-    // Build current message content with charts if provided
-    if (chartImages.length > 0) {
+    // Build current message content with charts/indicators if provided
+    if (chartImages.length > 0 || indicatorImages.length > 0) {
       const messageContent: Array<
         | { type: 'text'; text: string }
         | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
       > = [];
+
+      // Add indicator images first (if any)
+      indicatorImages.forEach((indicator) => {
+        messageContent.push({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: indicator.mimeType as ImageMediaType,
+            data: indicator.base64,
+          },
+        });
+      });
 
       // Add all chart images
       chartImages.forEach((chart) => {

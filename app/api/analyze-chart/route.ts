@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const strategy = formData.get('strategy') as string;
     const chartCount = parseInt(formData.get('chartCount') as string || '0');
+    const indicatorCount = parseInt(formData.get('indicatorCount') as string || '0');
 
     if (!strategy) {
       return NextResponse.json(
@@ -28,6 +29,24 @@ export async function POST(request: NextRequest) {
         { error: 'No chart images provided' },
         { status: 400 }
       );
+    }
+
+    // Collect all indicator images
+    const indicators: Array<{ base64: string; mimeType: string }> = [];
+
+    for (let i = 0; i < indicatorCount; i++) {
+      const indicatorFile = formData.get(`indicator_${i}`) as File;
+
+      if (indicatorFile) {
+        const arrayBuffer = await indicatorFile.arrayBuffer();
+        const base64Image = Buffer.from(arrayBuffer).toString('base64');
+        const mimeType = indicatorFile.type || 'image/png';
+
+        indicators.push({
+          base64: base64Image,
+          mimeType,
+        });
+      }
     }
 
     // Collect all charts with their timeframes
@@ -64,6 +83,18 @@ export async function POST(request: NextRequest) {
       | { type: 'text'; text: string }
     > = [];
 
+    // Add indicator images first (if any)
+    indicators.forEach((indicator) => {
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: indicator.mimeType as ImageMediaType,
+          data: indicator.base64,
+        },
+      });
+    });
+
     // Add all chart images with labels
     charts.forEach((chart) => {
       content.push({
@@ -77,7 +108,13 @@ export async function POST(request: NextRequest) {
     });
 
     // Build the analysis prompt
-    let analysisPrompt = `IMPORTANT: Respond in the same language as the strategy. Analyze ${charts.length} chart${charts.length > 1 ? 's' : ''}:\n\n`;
+    let analysisPrompt = `IMPORTANT: Respond in the same language as the strategy. `;
+
+    if (indicators.length > 0) {
+      analysisPrompt += `The first ${indicators.length} image${indicators.length > 1 ? 's show' : ' shows'} the indicator${indicators.length > 1 ? 's' : ''} being used. `;
+    }
+
+    analysisPrompt += `Analyze ${charts.length} chart${charts.length > 1 ? 's' : ''}:\n\n`;
 
     charts.forEach((chart, index) => {
       analysisPrompt += `Chart ${index + 1}: ${chart.timeframe}\n`;

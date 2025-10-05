@@ -21,7 +21,33 @@ export interface Strategy {
   updatedAt: Date;
 }
 
+export interface ChatMessage {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: Date;
+  type?: 'strategy' | 'chart' | 'text';
+  metadata?: {
+    fileName?: string;
+    timeframes?: string[];
+    chartCount?: number;
+  };
+}
+
+export interface Conversation {
+  _id?: ObjectId;
+  userId: ObjectId;
+  title: string;
+  messages: ChatMessage[];
+  strategyText?: string;
+  strategyAnalysis?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  lastMessageAt: Date;
+}
+
 export const COLLECTIONS = {
   USERS: 'users',
   STRATEGIES: 'strategies',
+  CONVERSATIONS: 'conversations',
 } as const;

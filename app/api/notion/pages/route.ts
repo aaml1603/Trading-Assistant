@@ -58,11 +58,28 @@ export async function GET(request: NextRequest) {
         let title = 'Untitled';
 
         // Try different property names for title
-        const properties = page.properties as Record<string, { title?: Array<{ plain_text: string }> }> | undefined;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const properties = page.properties as Record<string, any> | undefined;
         if (properties) {
-          const titleProp = properties.title || properties.Name || properties.name;
+          // Check for title property (most common)
+          const titleProp = properties.title;
           if (titleProp?.title?.[0]?.plain_text) {
             title = titleProp.title[0].plain_text;
+          }
+          
+          // If no title property found, look for the first text property
+          if (title === 'Untitled') {
+            for (const [_propName, propValue] of Object.entries(properties)) {
+              if (propValue?.title?.[0]?.plain_text) {
+                title = propValue.title[0].plain_text;
+                break;
+              }
+              // Also check for rich_text properties
+              if (propValue?.rich_text?.[0]?.plain_text) {
+                title = propValue.rich_text[0].plain_text;
+                break;
+              }
+            }
           }
         }
 
@@ -70,6 +87,11 @@ export async function GET(request: NextRequest) {
         const pageTitle = page.title as string | undefined;
         if (title === 'Untitled' && pageTitle) {
           title = pageTitle;
+        }
+
+        // If still untitled, try to use the first part of the page ID
+        if (title === 'Untitled') {
+          title = `Page ${(page.id as string).slice(-8)}`;
         }
 
         return {

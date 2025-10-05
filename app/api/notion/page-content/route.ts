@@ -129,13 +129,36 @@ export async function POST(request: NextRequest) {
     // Get page metadata
     const pageResponse = await notion.pages.retrieve({ page_id: pageId });
     const page = pageResponse as Record<string, unknown>;
-    const properties = page.properties as Record<string, { title?: Array<{ plain_text: string }> }> | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const properties = page.properties as Record<string, any> | undefined;
 
     let title = 'Untitled';
-    if (properties?.title?.title?.[0]?.plain_text) {
-      title = properties.title.title[0].plain_text;
-    } else if (properties?.Name?.title?.[0]?.plain_text) {
-      title = properties.Name.title[0].plain_text;
+    if (properties) {
+      // Check for title property (most common)
+      const titleProp = properties.title;
+      if (titleProp?.title?.[0]?.plain_text) {
+        title = titleProp.title[0].plain_text;
+      }
+      
+      // If no title property found, look for the first text property
+      if (title === 'Untitled') {
+        for (const [_propName, propValue] of Object.entries(properties)) {
+          if (propValue?.title?.[0]?.plain_text) {
+            title = propValue.title[0].plain_text;
+            break;
+          }
+          // Also check for rich_text properties
+          if (propValue?.rich_text?.[0]?.plain_text) {
+            title = propValue.rich_text[0].plain_text;
+            break;
+          }
+        }
+      }
+    }
+
+    // If still untitled, try to use the first part of the page ID
+    if (title === 'Untitled') {
+      title = `Page ${pageId.slice(-8)}`;
     }
 
     // Get page content (no truncation - process full content)
