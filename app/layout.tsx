@@ -37,7 +37,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <div className="h-full p-2 sm:p-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+            <div className="h-full p-2 sm:p-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-[#121212] dark:via-[#1F1F1F] dark:to-[#292929]">
               {children}
             </div>
           </AuthProvider>

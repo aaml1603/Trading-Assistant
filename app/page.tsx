@@ -15,7 +15,7 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X, MessageSquarePlus, Trash2, Menu, Settings } from 'lucide-react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X, MessageSquarePlus, Trash2, Menu, Settings, Pencil } from 'lucide-react';
 import { type FormEventHandler, useCallback, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import NotionConnect from './components/NotionConnect';
@@ -157,12 +157,15 @@ function TradingAssistant() {
   const [chartImages, setChartImages] = useState<Array<{ base64: string; mimeType: string; timeframe: string }>>([]);
   const [indicatorImages, setIndicatorImages] = useState<Array<{ base64: string; mimeType: string }>>([]);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [pastedImages, setPastedImages] = useState<Array<{ base64: string; mimeType: string; previewUrl: string }>>([]);
 
   // Conversation management
-  const [conversations, setConversations] = useState<Array<{ _id: string; title: string; updatedAt: Date; lastMessageAt: Date }>>([]);
+  const [conversations, setConversations] = useState<Array<{ _id: string; title: string; updatedAt: Date; lastMessageAt: Date; isManuallyRenamed?: boolean }>>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>('');
 
   // Custom instructions
   const [customInstructions, setCustomInstructions] = useState<string>('');
@@ -282,6 +285,30 @@ function TradingAssistant() {
     }
   }, [token, currentConversationId, createNewConversation, loadConversations]);
 
+  // Rename conversation
+  const renameConversation = useCallback(async (conversationId: string, newTitle: string) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: newTitle,
+          isManuallyRenamed: true,
+        }),
+      });
+      if (response.ok) {
+        await loadConversations();
+        setEditingConversationId(null);
+        setEditingTitle('');
+      }
+    } catch (error) {
+      console.error('Error renaming conversation:', error);
+    }
+  }, [token, loadConversations]);
+
   // Load custom instructions
   const loadCustomInstructions = useCallback(async () => {
     try {
@@ -352,9 +379,22 @@ function TradingAssistant() {
     }
   }, [messages, currentConversationId, saveConversation]);
 
+  // Cleanup pasted image URLs on unmount
+  useEffect(() => {
+    return () => {
+      pastedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
+    };
+  }, [pastedImages]);
+
   // Helper function to generate AI title
   const generateAndUpdateTitle = useCallback(async (conversationId: string, conversationMessages: ChatMessage[]) => {
     try {
+      // Check if conversation is manually renamed
+      const conversation = conversations.find(c => c._id === conversationId);
+      if (conversation?.isManuallyRenamed) {
+        return; // Don't auto-update manually renamed conversations
+      }
+
       const response = await fetch('/api/conversations/generate-title', {
         method: 'POST',
         headers: {
@@ -379,7 +419,7 @@ function TradingAssistant() {
     } catch (error) {
       console.error('Error generating title:', error);
     }
-  }, [token, loadConversations]);
+  }, [token, loadConversations, conversations]);
 
   // Strategy upload handler
   const handleStrategyUpload = useCallback(async (file: File, comments?: string) => {
@@ -624,20 +664,59 @@ function TradingAssistant() {
     createNewConversation();
   }, [createNewConversation]);
 
+  // Handle paste in chat input
+  const handlePasteInChat = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        if (blob) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            const previewUrl = URL.createObjectURL(blob);
+            setPastedImages(prev => [...prev, {
+              base64,
+              mimeType: blob.type,
+              previewUrl,
+            }]);
+          };
+          reader.readAsDataURL(blob);
+        }
+      }
+    }
+  }, []);
+
   const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(async (event) => {
     event.preventDefault();
-    if (!inputValue.trim() || isAnalyzing) return;
+    if ((!inputValue.trim() && pastedImages.length === 0) || isAnalyzing) return;
 
     const userMsgId = Date.now().toString();
     const userMessage = inputValue.trim();
+    const currentPastedImages = [...pastedImages];
     setInputValue('');
+    setPastedImages([]);
 
     const isFirstMessage = messages.length === 1; // Only welcome message
+
+    // Build user message content
+    let userContent = userMessage;
+    if (currentPastedImages.length > 0) {
+      if (userMessage) {
+        userContent = `${userMessage}\n\n📎 Attached ${currentPastedImages.length} image${currentPastedImages.length > 1 ? 's' : ''}`;
+      } else {
+        userContent = `📎 Sent ${currentPastedImages.length} image${currentPastedImages.length > 1 ? 's' : ''}`;
+      }
+    }
 
     // Add user message
     setMessages(prev => [...prev, {
       id: userMsgId,
-      content: userMessage,
+      content: userContent,
       role: 'user',
       timestamp: new Date(),
       type: 'text',
@@ -654,12 +733,24 @@ function TradingAssistant() {
     }]);
 
     try {
+      // Combine chart images, indicator images, and pasted images
+      const allImages = [
+        ...chartImages,
+        ...currentPastedImages.map(img => ({ ...img, timeframe: 'Pasted' }))
+      ];
+      const allIndicators = [
+        ...indicatorImages,
+      ];
+
+      // If user sends images without text, provide a default message
+      const messageToSend = userMessage || (currentPastedImages.length > 0 ? 'Please analyze this image in the context of my trading strategy.' : '');
+
       const formData = new FormData();
-      formData.append('message', userMessage);
+      formData.append('message', messageToSend);
       formData.append('strategy', strategyText || '');
       formData.append('conversationHistory', JSON.stringify(messages));
-      formData.append('chartImages', JSON.stringify(chartImages));
-      formData.append('indicatorImages', JSON.stringify(indicatorImages));
+      formData.append('chartImages', JSON.stringify(allImages));
+      formData.append('indicatorImages', JSON.stringify(allIndicators));
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -706,7 +797,7 @@ function TradingAssistant() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [inputValue, isAnalyzing, strategyText, messages, currentConversationId, token, loadConversations, generateAndUpdateTitle]);
+  }, [inputValue, isAnalyzing, strategyText, messages, currentConversationId, token, generateAndUpdateTitle, pastedImages, chartImages, indicatorImages]);
 
   const handleCopyMessage = useCallback((messageId: string, content: string) => {
     const plainText = stripMarkdown(content);
@@ -745,30 +836,93 @@ function TradingAssistant() {
             conversations.map((conv) => (
               <div
                 key={conv._id}
-                onClick={() => loadConversation(conv._id)}
-                className={`w-full text-left px-2 py-2 rounded text-xs hover:bg-muted/50 transition-colors group cursor-pointer ${
+                className={`w-full text-left px-2 py-2 rounded text-xs transition-colors ${
                   currentConversationId === conv._id ? 'bg-muted' : ''
-                }`}
+                } ${editingConversationId === conv._id ? '' : 'hover:bg-muted/50 cursor-pointer group'}`}
+                onClick={() => {
+                  if (editingConversationId !== conv._id) {
+                    loadConversation(conv._id);
+                  }
+                }}
               >
-                <div className="flex items-start justify-between gap-1">
-                  <span className="flex-1 truncate font-medium">
-                    {conv.title}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteConversation(conv._id);
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(conv.lastMessageAt).toLocaleDateString()}
-                </span>
+                {editingConversationId === conv._id ? (
+                  <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          renameConversation(conv._id, editingTitle);
+                        } else if (e.key === 'Escape') {
+                          setEditingConversationId(null);
+                          setEditingTitle('');
+                        }
+                      }}
+                      className="w-full px-2 py-1 text-xs rounded border bg-background"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-6 flex-1 text-xs"
+                        onClick={() => renameConversation(conv._id, editingTitle)}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 flex-1 text-xs"
+                        onClick={() => {
+                          setEditingConversationId(null);
+                          setEditingTitle('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-1">
+                      <span className="flex-1 truncate font-medium">
+                        {conv.title}
+                      </span>
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 w-5 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingConversationId(conv._id);
+                            setEditingTitle(conv.title);
+                          }}
+                          title="Rename"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 w-5 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteConversation(conv._id);
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(conv.lastMessageAt).toLocaleDateString()}
+                    </span>
+                  </>
+                )}
               </div>
             ))
           )}
@@ -925,14 +1079,37 @@ function TradingAssistant() {
 
         {/* Text Input for Conversation */}
         <div className="border-t px-3 sm:px-6 py-2 sm:py-3">
+          {/* Pasted Images Preview */}
+          {pastedImages.length > 0 && (
+            <div className="mb-2 flex gap-2 flex-wrap">
+              {pastedImages.map((img, index) => (
+                <div key={index} className="relative group">
+                  <img src={img.previewUrl} alt="" className="h-16 w-16 sm:h-20 sm:w-20 rounded object-cover border" />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="absolute -top-1 -right-1 h-5 w-5 p-0 bg-background/90 hover:bg-background opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                      URL.revokeObjectURL(img.previewUrl);
+                      setPastedImages(pastedImages.filter((_, i) => i !== index));
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <PromptInput onSubmit={handleSubmit}>
             <PromptInputTextarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onPaste={handlePasteInChat}
               placeholder={
                 strategyText
-                  ? "Ask follow-up questions..."
-                  : "Ask me anything about trading..."
+                  ? "Ask follow-up questions or paste images..."
+                  : "Ask me anything about trading or paste images..."
               }
               disabled={isAnalyzing}
               rows={2}
@@ -940,7 +1117,12 @@ function TradingAssistant() {
             />
             <PromptInputToolbar>
               <PromptInputTools>
-                {strategyText ? (
+                {pastedImages.length > 0 ? (
+                  <span className="text-xs sm:text-xs text-muted-foreground flex items-center gap-1">
+                    <ImageIcon className="h-3 w-3" />
+                    {pastedImages.length} image{pastedImages.length > 1 ? 's' : ''} attached
+                  </span>
+                ) : strategyText ? (
                   <span className="text-xs sm:text-xs text-muted-foreground hidden sm:flex items-center gap-1">
                     <Check className="h-3 w-3" />
                     Strategy loaded • Chat enabled
@@ -952,7 +1134,7 @@ function TradingAssistant() {
                 )}
               </PromptInputTools>
               <PromptInputSubmit
-                disabled={!inputValue.trim() || isAnalyzing}
+                disabled={(!inputValue.trim() && pastedImages.length === 0) || isAnalyzing}
                 status={isAnalyzing ? 'streaming' : 'ready'}
               />
             </PromptInputToolbar>

@@ -3,21 +3,35 @@ import bcrypt from 'bcryptjs';
 import { getDb } from '@/lib/mongodb';
 import { COLLECTIONS, User } from '@/lib/models';
 import { generateToken } from '@/lib/auth';
+import { validateEmail, validatePassword } from '@/lib/input-validation';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 5 registrations per 15 minutes per IP
+    if (!checkRateLimit(request, 5, 15 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: 'Too many registration attempts. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     const { email, password } = await request.json();
 
-    if (!email || !password) {
+    // Validate email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: emailValidation.error },
         { status: 400 }
       );
     }
 
-    if (password.length < 6) {
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters long' },
+        { error: passwordValidation.error },
         { status: 400 }
       );
     }

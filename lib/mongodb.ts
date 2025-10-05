@@ -5,7 +5,19 @@ if (!process.env.MONGODB_URI) {
 }
 
 const uri = process.env.MONGODB_URI;
-const options = {};
+
+// Security options for MongoDB connection
+const options = {
+  // Enable TLS/SSL in production
+  tls: process.env.NODE_ENV === 'production',
+  tlsAllowInvalidCertificates: false,
+  // Connection pool settings
+  maxPoolSize: 10,
+  minPoolSize: 2,
+  // Timeout settings
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+};
 
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;

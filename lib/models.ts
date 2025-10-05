@@ -42,6 +42,7 @@ export interface Conversation {
   messages: ChatMessage[];
   strategyText?: string;
   strategyAnalysis?: string;
+  isManuallyRenamed?: boolean;
   createdAt: Date;
   updatedAt: Date;
   lastMessageAt: Date;

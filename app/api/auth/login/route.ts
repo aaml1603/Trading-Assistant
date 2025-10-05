@@ -3,9 +3,18 @@ import bcrypt from 'bcryptjs';
 import { getDb } from '@/lib/mongodb';
 import { COLLECTIONS, User } from '@/lib/models';
 import { generateToken } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 10 login attempts per 15 minutes per IP
+    if (!checkRateLimit(request, 10, 15 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: 'Too many login attempts. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     const { email, password } = await request.json();
 
     if (!email || !password) {

@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '@/lib/mongodb';
 import { COLLECTIONS, User } from '@/lib/models';
 import { verifyToken } from '@/lib/auth';
+import { validateCustomInstructions, sanitizeString } from '@/lib/input-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching custom instructions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch custom instructions' },
+      { error: 'An error occurred' },
       { status: 500 }
     );
   }
@@ -55,12 +56,23 @@ export async function PATCH(request: NextRequest) {
 
     const { customInstructions } = await request.json();
 
+    // Validate and sanitize custom instructions
+    const validation = validateCustomInstructions(customInstructions || '');
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: 400 }
+      );
+    }
+
+    const sanitized = sanitizeString(customInstructions || '', 5000);
+
     const db = await getDb();
     const result = await db
       .collection<User>(COLLECTIONS.USERS)
       .findOneAndUpdate(
         { _id: new ObjectId(payload.userId) },
-        { $set: { customInstructions } },
+        { $set: { customInstructions: sanitized } },
         { returnDocument: 'after' }
       );
 
@@ -75,7 +87,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error('Error updating custom instructions:', error);
     return NextResponse.json(
-      { error: 'Failed to update custom instructions' },
+      { error: 'An error occurred' },
       { status: 500 }
     );
   }

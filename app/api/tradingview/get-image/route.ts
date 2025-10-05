@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import https from 'https';
+import { verifyToken } from '@/lib/auth';
+import { validateUrl } from '@/lib/input-validation';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * Fetches the image URL from a TradingView snapshot page
@@ -8,13 +11,35 @@ import https from 'https';
  */
 function getTradingViewImageUrl(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
+    // Add timeout to prevent hanging
+    const requestOptions = {
+      timeout: 10000, // 10 second timeout
+    };
+
+    https.get(url, requestOptions, (res) => {
       let data = '';
 
       // Check if redirect
       if (res.statusCode === 301 || res.statusCode === 302) {
         const location = res.headers.location;
         if (location) {
+          // Validate redirect location to prevent SSRF
+          try {
+            const redirectUrl = new URL(location);
+            const hostname = redirectUrl.hostname.toLowerCase();
+            if (!hostname.endsWith('.tradingview.com') && hostname !== 'tradingview.com') {
+              reject(new Error('Invalid redirect: must stay on tradingview.com domain'));
+              return;
+            }
+            if (redirectUrl.protocol !== 'https:') {
+              reject(new Error('Invalid redirect: must use HTTPS'));
+              return;
+            }
+          } catch {
+            reject(new Error('Invalid redirect URL'));
+            return;
+          }
+
           return getTradingViewImageUrl(location)
             .then(resolve)
             .catch(reject);
@@ -93,20 +118,40 @@ function fetchImageAsBase64(imageUrl: string): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { url } = body;
-
-    if (!url) {
+    // Require authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'TradingView URL is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    // Validate that it's a TradingView URL
-    if (!url.includes('tradingview.com')) {
+    const token = authHeader.substring(7);
+    const payload = verifyToken(token);
+    if (!payload) {
       return NextResponse.json(
-        { error: 'Invalid TradingView URL' },
+        { error: 'Invalid token' },
+        { status: 401 }
+      );
+    }
+
+    // Rate limiting: 10 requests per 5 minutes per user
+    if (!checkRateLimit(request, 10, 5 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
+    const body = await request.json();
+    const { url } = body;
+
+    // Validate URL
+    const urlValidation = validateUrl(url, ['tradingview.com']);
+    if (!urlValidation.valid) {
+      return NextResponse.json(
+        { error: urlValidation.error },
         { status: 400 }
       );
     }

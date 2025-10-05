@@ -4,6 +4,8 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '@/lib/mongodb';
 import { COLLECTIONS, User } from '@/lib/models';
 import { verifyToken } from '@/lib/auth';
+import { validateFile } from '@/lib/file-validation';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // Configure route for potentially long-running requests
 export const maxDuration = 300; // 5 minutes for chart analysis
@@ -25,6 +27,14 @@ export async function POST(request: NextRequest) {
       const payload = await verifyToken(token);
 
       if (payload) {
+        // Rate limiting: 30 chart analyses per hour
+        if (!checkRateLimit(request, 30, 60 * 60 * 1000)) {
+          return NextResponse.json(
+            { error: 'Too many analysis requests. Please try again later.' },
+            { status: 429 }
+          );
+        }
+
         const db = await getDb();
         const user = await db
           .collection<User>(COLLECTIONS.USERS)
@@ -62,6 +72,15 @@ export async function POST(request: NextRequest) {
       const indicatorFile = formData.get(`indicator_${i}`) as File;
 
       if (indicatorFile) {
+        // Validate file
+        const fileValidation = await validateFile(indicatorFile);
+        if (!fileValidation.valid) {
+          return NextResponse.json(
+            { error: `Indicator ${i + 1}: ${fileValidation.error}` },
+            { status: 400 }
+          );
+        }
+
         const arrayBuffer = await indicatorFile.arrayBuffer();
         const base64Image = Buffer.from(arrayBuffer).toString('base64');
         const mimeType = indicatorFile.type || 'image/png';
@@ -81,6 +100,15 @@ export async function POST(request: NextRequest) {
       const timeframe = formData.get(`timeframe_${i}`) as string;
 
       if (chartFile) {
+        // Validate file
+        const fileValidation = await validateFile(chartFile);
+        if (!fileValidation.valid) {
+          return NextResponse.json(
+            { error: `Chart ${i + 1}: ${fileValidation.error}` },
+            { status: 400 }
+          );
+        }
+
         const arrayBuffer = await chartFile.arrayBuffer();
         const base64Image = Buffer.from(arrayBuffer).toString('base64');
         const mimeType = chartFile.type || 'image/png';

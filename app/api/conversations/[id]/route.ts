@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '@/lib/mongodb';
 import { COLLECTIONS, Conversation } from '@/lib/models';
 import { verifyToken } from '@/lib/auth';
+import { validateConversationTitle, sanitizeString } from '@/lib/input-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +68,18 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { messages, strategyText, strategyAnalysis, title } = body;
+    const { messages, strategyText, strategyAnalysis, title, isManuallyRenamed } = body;
+
+    // Validate title if provided
+    if (title !== undefined) {
+      const titleValidation = validateConversationTitle(title);
+      if (!titleValidation.valid) {
+        return NextResponse.json(
+          { error: titleValidation.error },
+          { status: 400 }
+        );
+      }
+    }
 
     const { id } = await params;
     const db = await getDb();
@@ -79,9 +91,10 @@ export async function PATCH(
     };
 
     if (messages) updateFields.messages = messages;
-    if (strategyText !== undefined) updateFields.strategyText = strategyText;
-    if (strategyAnalysis !== undefined) updateFields.strategyAnalysis = strategyAnalysis;
-    if (title !== undefined) updateFields.title = title;
+    if (strategyText !== undefined) updateFields.strategyText = sanitizeString(strategyText, 500000); // Large limit for strategy text
+    if (strategyAnalysis !== undefined) updateFields.strategyAnalysis = sanitizeString(strategyAnalysis, 100000);
+    if (title !== undefined) updateFields.title = sanitizeString(title, 200);
+    if (isManuallyRenamed !== undefined) updateFields.isManuallyRenamed = isManuallyRenamed;
 
     const result = await db
       .collection<Conversation>(COLLECTIONS.CONVERSATIONS)

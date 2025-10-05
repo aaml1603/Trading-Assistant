@@ -4,6 +4,9 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '@/lib/mongodb';
 import { COLLECTIONS, Strategy } from '@/lib/models';
 import { getUserFromRequest } from '@/lib/auth';
+import { validateFile } from '@/lib/file-validation';
+import { sanitizeString } from '@/lib/input-validation';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // Configure route for long-running requests
 export const maxDuration = 300; // 5 minutes
@@ -25,6 +28,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Rate limiting: 20 strategy uploads per hour
+    if (!checkRateLimit(request, 20, 60 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: 'Too many uploads. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     const formData = await request.formData();
     const pdfFile = formData.get('pdf') as File;
     const additionalComments = formData.get('additionalComments') as string;
@@ -35,6 +46,18 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Validate file
+    const fileValidation = await validateFile(pdfFile);
+    if (!fileValidation.valid) {
+      return NextResponse.json(
+        { error: fileValidation.error },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize additional comments
+    const sanitizedComments = additionalComments ? sanitizeString(additionalComments, 5000) : '';
 
     // Extract strategy content without analysis
     let strategyContent = '';
@@ -93,7 +116,7 @@ export async function POST(request: NextRequest) {
       analysis,
       strategyText: strategyContent,
       fileType: pdfFile.type,
-      additionalComments: additionalComments || undefined,
+      additionalComments: sanitizedComments || undefined,
       createdAt: now,
       updatedAt: now,
     };
