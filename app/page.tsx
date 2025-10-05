@@ -15,7 +15,7 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X, MessageSquarePlus, Trash2, Menu } from 'lucide-react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X, MessageSquarePlus, Trash2, Menu, Settings } from 'lucide-react';
 import { type FormEventHandler, useCallback, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import NotionConnect from './components/NotionConnect';
@@ -164,6 +164,12 @@ function TradingAssistant() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(true);
 
+  // Custom instructions
+  const [customInstructions, setCustomInstructions] = useState<string>('');
+  const [tempInstructions, setTempInstructions] = useState<string>('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savingInstructions, setSavingInstructions] = useState(false);
+
   // Load all conversations
   const loadConversations = useCallback(async () => {
     try {
@@ -276,12 +282,54 @@ function TradingAssistant() {
     }
   }, [token, currentConversationId, createNewConversation, loadConversations]);
 
-  // Load conversations on mount and create first conversation if needed
+  // Load custom instructions
+  const loadCustomInstructions = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/instructions', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCustomInstructions(data.customInstructions || '');
+        setTempInstructions(data.customInstructions || '');
+      }
+    } catch (error) {
+      console.error('Error loading custom instructions:', error);
+    }
+  }, [token]);
+
+  // Save custom instructions
+  const saveCustomInstructions = useCallback(async () => {
+    setSavingInstructions(true);
+    try {
+      const response = await fetch('/api/auth/instructions', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ customInstructions: tempInstructions }),
+      });
+      if (response.ok) {
+        setCustomInstructions(tempInstructions);
+        setSettingsOpen(false);
+      }
+    } catch (error) {
+      console.error('Error saving custom instructions:', error);
+    } finally {
+      setSavingInstructions(false);
+    }
+  }, [token, tempInstructions]);
+
+  // Load conversations and custom instructions on mount
   useEffect(() => {
     if (token) {
       loadConversations();
+      loadCustomInstructions();
     }
-  }, [token, loadConversations]);
+  }, [token, loadConversations, loadCustomInstructions]);
 
   // Create first conversation if none exist, or load first conversation if none is selected
   useEffect(() => {
@@ -750,6 +798,19 @@ function TradingAssistant() {
             </span>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setTempInstructions(customInstructions);
+                setSettingsOpen(true);
+              }}
+              className="h-7 sm:h-8 px-1.5 sm:px-2"
+              title="Custom Instructions"
+            >
+              <Settings className="size-3.5 sm:size-4" />
+              <span className="ml-1 hidden sm:inline">Settings</span>
+            </Button>
             <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -899,6 +960,58 @@ function TradingAssistant() {
         </div>
       </div>
       </div>
+
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSettingsOpen(false)}>
+          <div className="bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Custom Instructions</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setSettingsOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Add custom instructions that the AI will always follow in every conversation. These instructions will be included in all chat responses, strategy analyses, and chart analyses.
+              </p>
+              <textarea
+                value={tempInstructions}
+                onChange={(e) => setTempInstructions(e.target.value)}
+                placeholder="e.g., Always respond in Spanish, focus on swing trading setups, avoid risky strategies..."
+                className="w-full min-h-[200px] resize-none rounded-md border bg-background px-3 py-2 text-sm"
+              />
+              <div className="flex items-center gap-2">
+                {customInstructions && (
+                  <span className="text-xs text-muted-foreground">
+                    Current instructions active
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setSettingsOpen(false)}
+                disabled={savingInstructions}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={saveCustomInstructions}
+                disabled={savingInstructions}
+              >
+                {savingInstructions ? 'Saving...' : 'Save Instructions'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

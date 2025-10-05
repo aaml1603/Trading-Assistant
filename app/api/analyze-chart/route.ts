@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { ObjectId } from 'mongodb';
+import { getDb } from '@/lib/mongodb';
+import { COLLECTIONS, User } from '@/lib/models';
+import { verifyToken } from '@/lib/auth';
 
 // Configure route for potentially long-running requests
 export const maxDuration = 300; // 5 minutes for chart analysis
@@ -12,6 +16,26 @@ const anthropic = new Anthropic({
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify user and get custom instructions
+    const authHeader = request.headers.get('authorization');
+    let customInstructions = '';
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const payload = await verifyToken(token);
+
+      if (payload) {
+        const db = await getDb();
+        const user = await db
+          .collection<User>(COLLECTIONS.USERS)
+          .findOne({ _id: new ObjectId(payload.userId) });
+
+        if (user?.customInstructions) {
+          customInstructions = user.customInstructions;
+        }
+      }
+    }
+
     const formData = await request.formData();
     const strategy = formData.get('strategy') as string;
     const chartCount = parseInt(formData.get('chartCount') as string || '0');
@@ -148,10 +172,19 @@ export async function POST(request: NextRequest) {
       text: analysisPrompt,
     });
 
+    // Build system prompt
+    let systemPrompt = 'You are a trading assistant analyzing charts based on the provided strategy. Be CONCISE and DIRECT.';
+
+    // Add custom instructions if available
+    if (customInstructions && customInstructions.trim()) {
+      systemPrompt += `\n\nIMPORTANT - Custom Instructions (ALWAYS follow these):\n${customInstructions}`;
+    }
+
     // Analyze the charts using Claude with vision
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 16384,
+      system: systemPrompt,
       messages: [
         {
           role: 'user',

@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { ObjectId } from 'mongodb';
+import { getDb } from '@/lib/mongodb';
+import { COLLECTIONS, User } from '@/lib/models';
+import { verifyToken } from '@/lib/auth';
 
 // Configure route for chat requests
 export const maxDuration = 60; // 1 minute for chat
@@ -12,6 +16,26 @@ const anthropic = new Anthropic({
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify user and get custom instructions
+    const authHeader = request.headers.get('authorization');
+    let customInstructions = '';
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const payload = await verifyToken(token);
+
+      if (payload) {
+        const db = await getDb();
+        const user = await db
+          .collection<User>(COLLECTIONS.USERS)
+          .findOne({ _id: new ObjectId(payload.userId) });
+
+        if (user?.customInstructions) {
+          customInstructions = user.customInstructions;
+        }
+      }
+    }
+
     const formData = await request.formData();
     const message = formData.get('message') as string;
     const strategy = formData.get('strategy') as string;
@@ -73,6 +97,11 @@ export async function POST(request: NextRequest) {
 
     // Build system prompt
     let systemPrompt = `You are a trading assistant. Be CONCISE and DIRECT. Keep responses brief - 3-5 sentences max unless specifically asked for detail. Focus on actionable insights only. IMPORTANT: Always respond in the same language as the user's messages.`;
+
+    // Add custom instructions if available
+    if (customInstructions && customInstructions.trim()) {
+      systemPrompt += `\n\nIMPORTANT - Custom Instructions (ALWAYS follow these):\n${customInstructions}`;
+    }
 
     if (strategy && strategy.trim()) {
       systemPrompt += `\n\nThe user has already uploaded their trading strategy. Here it is:\n\n${strategy}\n\nWhen the user asks about "my strategy" or to "explain my strategy", you are referring to THIS strategy above. You have it in context - explain it based on the content provided.`;

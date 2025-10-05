@@ -7,6 +7,7 @@ export interface User {
   createdAt: Date;
   notionAccessToken?: string;
   notionWorkspaceName?: string;
+  customInstructions?: string;
 }
 
 export interface Strategy {
