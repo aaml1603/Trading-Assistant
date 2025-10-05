@@ -1,11 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
+if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable must be set');
 }
+
+const JWT_SECRET: string = process.env.JWT_SECRET;
 
 export interface JWTPayload {
   userId: string;
@@ -19,7 +19,7 @@ export function generateToken(payload: JWTPayload): string {
 export function verifyToken(token: string): JWTPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as JWTPayload;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
