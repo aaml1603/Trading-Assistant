@@ -1396,7 +1396,7 @@ function UploadSection({
     }
   }, []);
 
-  const toggleRecording = () => {
+  const toggleRecording = async () => {
     if (!recognition) {
       alert('Voice recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
       return;
@@ -1410,13 +1410,22 @@ function UploadSection({
       setInterimTranscript('');
     } else {
       try {
+        // Request microphone permission first
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+
         recognition.start();
         setIsRecording(true);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any)._isRecording = true;
       } catch (e) {
         console.error('Failed to start recognition:', e);
-        alert('Failed to start voice recognition. Please check your microphone permissions.');
+        if (e instanceof Error && e.name === 'NotAllowedError') {
+          alert('Microphone permission denied. Please allow microphone access in your browser settings and try again.');
+        } else if (e instanceof Error && e.name === 'NotFoundError') {
+          alert('No microphone found. Please connect a microphone and try again.');
+        } else {
+          alert('Failed to start voice recognition. Please check your microphone permissions in browser settings.');
+        }
       }
     }
   };
