@@ -1365,13 +1365,39 @@ function UploadSection({
           }
         };
 
-        recognitionInstance.onerror = (event: { error: string }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        recognitionInstance.onerror = (event: any) => {
           console.error('Speech recognition error:', event.error);
+          console.error('Full error event:', event);
+
           if (event.error === 'no-speech') {
             // Don't stop on no-speech, just continue listening
             console.log('No speech detected, continuing to listen...');
-          } else {
+          } else if (event.error === 'not-allowed') {
             setIsRecording(false);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any)._isRecording = false;
+            alert('Microphone access was denied. Please allow microphone access in your browser:\n\n1. Click the lock/info icon in the address bar\n2. Allow microphone access\n3. Refresh the page and try again');
+          } else if (event.error === 'audio-capture') {
+            setIsRecording(false);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any)._isRecording = false;
+            alert('Could not access your microphone. Please check:\n\n1. Your microphone is connected and working\n2. No other app is using the microphone\n3. Browser has microphone permission');
+          } else if (event.error === 'network') {
+            setIsRecording(false);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any)._isRecording = false;
+            alert('Network error occurred. Speech recognition requires an internet connection.');
+          } else if (event.error === 'aborted') {
+            console.log('Speech recognition was aborted');
+            setIsRecording(false);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any)._isRecording = false;
+          } else {
+            console.error('Unknown speech recognition error:', event.error);
+            setIsRecording(false);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window as any)._isRecording = false;
           }
         };
 
@@ -1396,26 +1422,30 @@ function UploadSection({
     }
   }, []);
 
-  const toggleRecording = async () => {
+  const toggleRecording = () => {
     if (!recognition) {
       alert('Voice recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
       return;
     }
 
     if (isRecording) {
-      recognition.stop();
-      setIsRecording(false);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any)._isRecording = false;
-      setInterimTranscript('');
+      try {
+        recognition.stop();
+        setIsRecording(false);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any)._isRecording = false;
+        setInterimTranscript('');
+      } catch (e) {
+        console.error('Error stopping recognition:', e);
+        setIsRecording(false);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any)._isRecording = false;
+        setInterimTranscript('');
+      }
     } else {
       try {
-        // Request microphone permission first
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        // Stop the stream immediately - we only needed it for permission
-        stream.getTracks().forEach(track => track.stop());
-
+        // Speech Recognition API handles its own microphone permissions
+        // No need for getUserMedia - it will prompt automatically
         recognition.start();
         setIsRecording(true);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1424,17 +1454,24 @@ function UploadSection({
         console.error('Failed to start recognition:', e);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const error = e as any;
-        console.error('Error name:', error?.name);
-        console.error('Error message:', error?.message);
 
-        if (error?.name === 'NotAllowedError') {
-          alert('Microphone permission denied. Please allow microphone access in your browser settings and try again.');
-        } else if (error?.name === 'NotFoundError') {
-          alert('No microphone found. Please connect a microphone and try again.');
-        } else if (error?.message && error.message.includes('already started')) {
-          alert('Voice recognition is already running. Please stop it first.');
+        // Check if it's already started
+        if (error?.message && error.message.includes('already started')) {
+          // Force stop and retry
+          try {
+            recognition.stop();
+            setTimeout(() => {
+              recognition.start();
+              setIsRecording(true);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (window as any)._isRecording = true;
+            }, 100);
+          } catch (retryError) {
+            console.error('Retry failed:', retryError);
+            alert('Voice recognition failed to start. Please refresh the page and try again.');
+          }
         } else {
-          alert(`Failed to start voice recognition: ${error?.message || 'Unknown error'}. Please check console for details.`);
+          alert(`Failed to start voice recognition. Make sure you're using Chrome, Edge, or Safari, and that you've allowed microphone access when prompted.\n\nError: ${error?.message || 'Unknown error'}`);
         }
       }
     }
