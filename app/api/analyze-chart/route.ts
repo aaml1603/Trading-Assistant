@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
     const strategy = formData.get('strategy') as string;
     const chartCount = parseInt(formData.get('chartCount') as string || '0');
     const indicatorCount = parseInt(formData.get('indicatorCount') as string || '0');
+    const description = formData.get('description') as string;
 
     if (!strategy) {
       return NextResponse.json(
@@ -172,6 +173,10 @@ export async function POST(request: NextRequest) {
       analysisPrompt += `Chart ${index + 1}: ${chart.timeframe}\n`;
     });
 
+    if (description && description.trim()) {
+      analysisPrompt += `\n**User's Chart Observations:**\n${description}\n`;
+    }
+
     analysisPrompt += `\n**Strategy:**\n${strategy}\n\n`;
 
     if (charts.length > 1) {
@@ -201,7 +206,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Build system prompt
-    let systemPrompt = 'You are a trading assistant analyzing charts based on the provided strategy. Be CONCISE and DIRECT.';
+    let systemPrompt = 'You are a trading assistant analyzing charts based on the provided strategy. Be CONCISE and DIRECT. Pay special attention to any user observations about the chart, as these provide crucial context about what they see in the image.';
 
     // Add custom instructions if available
     if (customInstructions && customInstructions.trim()) {

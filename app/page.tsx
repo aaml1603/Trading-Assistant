@@ -15,7 +15,7 @@ import {
   PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import { Button } from '@/components/ui/button';
-import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X, MessageSquarePlus, Trash2, Menu, Settings, Pencil } from 'lucide-react';
+import { FileText, Image as ImageIcon, RotateCcwIcon, Download, Link, Copy, Check, LogOut, X, MessageSquarePlus, Trash2, Menu, Settings, Pencil, Mic, MicOff } from 'lucide-react';
 import { type FormEventHandler, useCallback, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import NotionConnect from './components/NotionConnect';
@@ -520,7 +520,7 @@ function TradingAssistant() {
   }, [messages, currentConversationId, token, generateAndUpdateTitle]);
 
   // Chart upload handler
-  const handleChartUpload = useCallback(async (charts: Array<{ file: File; timeframe: string }>, indicators: File[]) => {
+  const handleChartUpload = useCallback(async (charts: Array<{ file: File; timeframe: string }>, indicators: File[], description?: string) => {
     if (!strategyText) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
@@ -602,6 +602,10 @@ function TradingAssistant() {
       formData.append('indicatorCount', indicators.length.toString());
 
       formData.append('strategy', strategyText);
+
+      if (description) {
+        formData.append('description', description);
+      }
 
       const response = await fetch('/api/analyze-chart', {
         method: 'POST',
@@ -1222,7 +1226,7 @@ function UploadSection({
 }: {
   strategyAnalysis: string | null;
   onStrategyUpload: (file: File, comments?: string) => void;
-  onChartUpload: (charts: Array<{ file: File; timeframe: string }>, indicators: File[]) => void;
+  onChartUpload: (charts: Array<{ file: File; timeframe: string }>, indicators: File[], description?: string) => void;
   isAnalyzing: boolean;
   token: string;
 }) {
@@ -1236,6 +1240,18 @@ function UploadSection({
   const [loadingTradingView, setLoadingTradingView] = useState(false);
   const [tradingViewError, setTradingViewError] = useState<string | null>(null);
   const [pasteSuccess, setPasteSuccess] = useState(false);
+  const [chartDescription, setChartDescription] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recognition, setRecognition] = useState<{
+    start: () => void;
+    stop: () => void;
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((event: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => void) | null;
+    onerror: ((event: { error: string }) => void) | null;
+    onend: (() => void) | null;
+  } | null>(null);
 
   const handleStrategySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1306,6 +1322,53 @@ function UploadSection({
   const hasStrategy = strategyAnalysis !== null && strategyAnalysis.length > 0;
 
   console.log('UploadSection render:', { hasStrategy, strategyAnalysisLength: strategyAnalysis?.length });
+
+  // Initialize speech recognition on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (SpeechRecognitionAPI) {
+        const recognitionInstance = new SpeechRecognitionAPI();
+        recognitionInstance.continuous = false;
+        recognitionInstance.interimResults = false;
+        recognitionInstance.lang = 'en-US';
+
+        recognitionInstance.onresult = (event: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => {
+          const transcript = event.results[0][0].transcript;
+          setChartDescription(prev => prev ? `${prev} ${transcript}` : transcript);
+          setIsRecording(false);
+        };
+
+        recognitionInstance.onerror = (event: { error: string }) => {
+          console.error('Speech recognition error:', event.error);
+          setIsRecording(false);
+        };
+
+        recognitionInstance.onend = () => {
+          setIsRecording(false);
+        };
+
+        setRecognition(recognitionInstance);
+      }
+    }
+  }, []);
+
+  const toggleRecording = () => {
+    if (!recognition) {
+      alert('Voice recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
+    if (isRecording) {
+      recognition.stop();
+      setIsRecording(false);
+    } else {
+      recognition.start();
+      setIsRecording(true);
+    }
+  };
 
   const handleNotionPageSelected = (content: string, title: string) => {
     // Simulate file upload by calling parent's upload handler with notion content
@@ -1608,13 +1671,57 @@ function UploadSection({
                   </Button>
                 </div>
               ))}
+
+              {/* Chart Description with Voice Input */}
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium text-muted-foreground px-1">Chart Description (Optional)</div>
+                <div className="flex gap-1.5">
+                  <textarea
+                    value={chartDescription}
+                    onChange={(e) => setChartDescription(e.target.value)}
+                    placeholder="Describe what you see... e.g., 'Price at resistance, RSI overbought at 72'"
+                    rows={2}
+                    className="flex-1 resize-none rounded-md border bg-background px-2 py-1.5 text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant={isRecording ? "destructive" : "outline"}
+                    size="sm"
+                    className="h-auto px-2"
+                    onClick={toggleRecording}
+                    title={isRecording ? "Stop recording" : "Start voice input"}
+                  >
+                    {isRecording ? (
+                      <>
+                        <MicOff className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {isRecording && (
+                  <div className="flex items-center gap-1.5 px-1">
+                    <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-xs text-muted-foreground">Listening...</span>
+                  </div>
+                )}
+              </div>
+
               <Button
                 onClick={() => {
-                  onChartUpload(charts.map(c => ({ file: c.file, timeframe: c.timeframe })), indicators.map(i => i.file));
+                  onChartUpload(
+                    charts.map(c => ({ file: c.file, timeframe: c.timeframe })),
+                    indicators.map(i => i.file),
+                    chartDescription.trim() || undefined
+                  );
                   charts.forEach(c => URL.revokeObjectURL(c.previewUrl));
                   indicators.forEach(i => URL.revokeObjectURL(i.previewUrl));
                   setCharts([]);
                   setIndicators([]);
+                  setChartDescription('');
                 }}
                 disabled={isAnalyzing || charts.some(c => !c.timeframe.trim())}
                 size="sm"
