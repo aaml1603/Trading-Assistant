@@ -1327,6 +1327,14 @@ function UploadSection({
   // Initialize speech recognition on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Check if we're on a secure context (HTTPS or localhost)
+      const isSecureContext = window.isSecureContext;
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+      if (!isSecureContext && !isLocalhost) {
+        console.warn('Speech Recognition requires HTTPS or localhost. Current URL:', window.location.href);
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -1377,7 +1385,16 @@ function UploadSection({
             setIsRecording(false);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (window as any)._isRecording = false;
-            alert('Microphone access was denied. Please allow microphone access in your browser:\n\n1. Click the lock/info icon in the address bar\n2. Allow microphone access\n3. Refresh the page and try again');
+
+            // Check if it's a secure context issue
+            const isSecure = window.isSecureContext;
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+            if (!isSecure && !isLocalhost) {
+              alert('⚠️ HTTPS Required for Microphone Access\n\nWeb Speech API requires a secure connection (HTTPS) to access the microphone.\n\nTo fix this:\n1. Access the site via https:// (not http://)\n2. Or use localhost for development\n3. Or deploy to a platform with HTTPS (Vercel, Netlify, etc.)\n\nCurrent URL: ' + window.location.href);
+            } else {
+              alert('Microphone access was denied. Please allow microphone access:\n\n1. Click the lock/info icon in the address bar\n2. Find "Microphone" permission\n3. Change it to "Allow"\n4. Refresh the page (Cmd/Ctrl + R)\n5. Try clicking the mic button again');
+            }
           } else if (event.error === 'audio-capture') {
             setIsRecording(false);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
