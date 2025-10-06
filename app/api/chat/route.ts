@@ -6,12 +6,12 @@ import { COLLECTIONS, User } from '@/lib/models';
 import { verifyToken } from '@/lib/auth';
 
 // Configure route for chat requests
-export const maxDuration = 60; // 1 minute for chat
+export const maxDuration = 300; // 5 minutes for chat (to handle complex queries with images)
 export const dynamic = 'force-dynamic';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
-  timeout: 60000, // 1 minute timeout
+  timeout: 300000, // 5 minutes timeout
 });
 
 export async function POST(request: NextRequest) {

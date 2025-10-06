@@ -752,13 +752,19 @@ function TradingAssistant() {
       formData.append('chartImages', JSON.stringify(allImages));
       formData.append('indicatorImages', JSON.stringify(allIndicators));
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -789,9 +795,18 @@ function TradingAssistant() {
         generateAndUpdateTitle(currentConversationId, updatedMessages);
       }
     } catch (err) {
+      let errorMessage = 'Failed to get response';
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          errorMessage = 'The request took too long and timed out after 5 minutes. Please try simplifying your question or reducing the number of images.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+
       setMessages(prev => prev.map(msg =>
         msg.id === streamingMsgId
-          ? { ...msg, content: `Error: ${err instanceof Error ? err.message : 'Failed to get response'}`, isStreaming: false }
+          ? { ...msg, content: `Error: ${errorMessage}`, isStreaming: false }
           : msg
       ));
     } finally {
