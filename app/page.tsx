@@ -1393,7 +1393,28 @@ function UploadSection({
             if (!isSecure && !isLocalhost) {
               alert('⚠️ HTTPS Required for Microphone Access\n\nWeb Speech API requires a secure connection (HTTPS) to access the microphone.\n\nTo fix this:\n1. Access the site via https:// (not http://)\n2. Or use localhost for development\n3. Or deploy to a platform with HTTPS (Vercel, Netlify, etc.)\n\nCurrent URL: ' + window.location.href);
             } else {
-              alert('Microphone access was denied. Please allow microphone access:\n\n1. Click the lock/info icon in the address bar\n2. Find "Microphone" permission\n3. Change it to "Allow"\n4. Refresh the page (Cmd/Ctrl + R)\n5. Try clicking the mic button again');
+              alert(`⚠️ Microphone Permission Blocked
+
+Even though you're on HTTPS, microphone access was denied.
+
+STEPS TO FIX:
+
+1. Close this alert
+2. Look at the address bar - you should see a microphone icon with a red X
+3. Click the microphone icon or the lock icon
+4. Select "Always allow ${window.location.hostname} to access your microphone"
+5. Click "Done" or "Allow"
+6. Refresh the page (Cmd/Ctrl + R)
+7. Try the microphone button again
+
+ALTERNATIVE FIX:
+• Open Chrome Settings (chrome://settings/content/microphone)
+• Find "${window.location.hostname}" in the blocked list
+• Remove it or move it to "Allowed"
+• Refresh this page
+
+Current URL: ${window.location.href}
+Secure Context: ${window.isSecureContext ? 'Yes ✓' : 'No ✗'}`);
             }
           } else if (event.error === 'audio-capture') {
             setIsRecording(false);
@@ -1445,6 +1466,15 @@ function UploadSection({
       return;
     }
 
+    // Log diagnostic info
+    console.log('=== Voice Recognition Diagnostic ===');
+    console.log('Secure Context:', window.isSecureContext);
+    console.log('Protocol:', window.location.protocol);
+    console.log('Hostname:', window.location.hostname);
+    console.log('Full URL:', window.location.href);
+    console.log('Current recording state:', isRecording);
+    console.log('================================');
+
     if (isRecording) {
       try {
         recognition.stop();
@@ -1463,6 +1493,7 @@ function UploadSection({
       try {
         // Speech Recognition API handles its own microphone permissions
         // No need for getUserMedia - it will prompt automatically
+        console.log('Starting speech recognition...');
         recognition.start();
         setIsRecording(true);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1488,7 +1519,14 @@ function UploadSection({
             alert('Voice recognition failed to start. Please refresh the page and try again.');
           }
         } else {
-          alert(`Failed to start voice recognition. Make sure you're using Chrome, Edge, or Safari, and that you've allowed microphone access when prompted.\n\nError: ${error?.message || 'Unknown error'}`);
+          // Show detailed error with instructions
+          const diagnosticInfo = `
+Protocol: ${window.location.protocol}
+Secure Context: ${window.isSecureContext}
+URL: ${window.location.href}
+Error: ${error?.message || 'Unknown error'}`;
+
+          alert(`Failed to start voice recognition.\n\nDiagnostic Info:${diagnosticInfo}\n\nPlease check browser console for more details.`);
         }
       }
     }
