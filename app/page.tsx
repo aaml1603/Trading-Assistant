@@ -1411,7 +1411,10 @@ function UploadSection({
     } else {
       try {
         // Request microphone permission first
-        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // Stop the stream immediately - we only needed it for permission
+        stream.getTracks().forEach(track => track.stop());
 
         recognition.start();
         setIsRecording(true);
@@ -1419,12 +1422,19 @@ function UploadSection({
         (window as any)._isRecording = true;
       } catch (e) {
         console.error('Failed to start recognition:', e);
-        if (e instanceof Error && e.name === 'NotAllowedError') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const error = e as any;
+        console.error('Error name:', error?.name);
+        console.error('Error message:', error?.message);
+
+        if (error?.name === 'NotAllowedError') {
           alert('Microphone permission denied. Please allow microphone access in your browser settings and try again.');
-        } else if (e instanceof Error && e.name === 'NotFoundError') {
+        } else if (error?.name === 'NotFoundError') {
           alert('No microphone found. Please connect a microphone and try again.');
+        } else if (error?.message && error.message.includes('already started')) {
+          alert('Voice recognition is already running. Please stop it first.');
         } else {
-          alert('Failed to start voice recognition. Please check your microphone permissions in browser settings.');
+          alert(`Failed to start voice recognition: ${error?.message || 'Unknown error'}. Please check console for details.`);
         }
       }
     }
