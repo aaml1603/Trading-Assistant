@@ -1242,6 +1242,7 @@ function UploadSection({
   const [pasteSuccess, setPasteSuccess] = useState(false);
   const [chartDescription, setChartDescription] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
   const [recognition, setRecognition] = useState<{
     start: () => void;
     stop: () => void;
@@ -1331,23 +1332,63 @@ function UploadSection({
 
       if (SpeechRecognitionAPI) {
         const recognitionInstance = new SpeechRecognitionAPI();
-        recognitionInstance.continuous = false;
-        recognitionInstance.interimResults = false;
+        recognitionInstance.continuous = true; // Keep listening until manually stopped
+        recognitionInstance.interimResults = true; // Show interim results as user speaks
         recognitionInstance.lang = 'en-US';
+        recognitionInstance.maxAlternatives = 1;
 
-        recognitionInstance.onresult = (event: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => {
-          const transcript = event.results[0][0].transcript;
-          setChartDescription(prev => prev ? `${prev} ${transcript}` : transcript);
-          setIsRecording(false);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        recognitionInstance.onresult = (event: any) => {
+          let finalTranscript = '';
+          let interimText = '';
+
+          // Process all results
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript + ' ';
+            } else {
+              interimText += transcript;
+            }
+          }
+
+          // Show interim results
+          setInterimTranscript(interimText);
+
+          // Update description with final transcript only
+          if (finalTranscript) {
+            setChartDescription(prev => {
+              const newText = prev ? `${prev} ${finalTranscript}`.trim() : finalTranscript.trim();
+              return newText;
+            });
+            setInterimTranscript(''); // Clear interim after final
+          }
         };
 
         recognitionInstance.onerror = (event: { error: string }) => {
           console.error('Speech recognition error:', event.error);
-          setIsRecording(false);
+          if (event.error === 'no-speech') {
+            // Don't stop on no-speech, just continue listening
+            console.log('No speech detected, continuing to listen...');
+          } else {
+            setIsRecording(false);
+          }
         };
 
         recognitionInstance.onend = () => {
-          setIsRecording(false);
+          // Auto-restart if still in recording mode (prevents auto-stop)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const stillRecording = (window as any)._isRecording;
+          if (stillRecording) {
+            try {
+              recognitionInstance.start();
+            } catch (e) {
+              console.log('Recognition restart failed:', e);
+              setIsRecording(false);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (window as any)._isRecording = false;
+            }
+          }
         };
 
         setRecognition(recognitionInstance);
@@ -1364,9 +1405,19 @@ function UploadSection({
     if (isRecording) {
       recognition.stop();
       setIsRecording(false);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any)._isRecording = false;
+      setInterimTranscript('');
     } else {
-      recognition.start();
-      setIsRecording(true);
+      try {
+        recognition.start();
+        setIsRecording(true);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any)._isRecording = true;
+      } catch (e) {
+        console.error('Failed to start recognition:', e);
+        alert('Failed to start voice recognition. Please check your microphone permissions.');
+      }
     }
   };
 
@@ -1703,9 +1754,16 @@ function UploadSection({
                   </Button>
                 </div>
                 {isRecording && (
-                  <div className="flex items-center gap-1.5 px-1">
-                    <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-xs text-muted-foreground">Listening...</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-1">
+                      <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-xs text-muted-foreground">Listening... Click mic again to stop</span>
+                    </div>
+                    {interimTranscript && (
+                      <div className="px-1 py-1 text-xs text-muted-foreground italic border-l-2 border-red-500 pl-2">
+                        {interimTranscript}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
