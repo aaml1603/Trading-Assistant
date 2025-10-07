@@ -47,12 +47,22 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const strategy = formData.get('strategy') as string;
+    const strategiesStr = formData.get('strategies') as string;
     const chartCount = parseInt(formData.get('chartCount') as string || '0');
     const indicatorCount = parseInt(formData.get('indicatorCount') as string || '0');
     const description = formData.get('description') as string;
 
-    if (!strategy) {
+    // Parse strategies
+    let strategies: Array<{ id: string; name: string; text: string; analysis: string }> = [];
+    try {
+      if (strategiesStr) {
+        strategies = JSON.parse(strategiesStr);
+      }
+    } catch {
+      // If parsing fails, continue without strategies
+    }
+
+    if (strategies.length === 0) {
       return NextResponse.json(
         { error: 'No strategy provided. Please upload a strategy PDF first.' },
         { status: 400 }
@@ -177,7 +187,11 @@ export async function POST(request: NextRequest) {
       analysisPrompt += `\n**User's Chart Observations:**\n${description}\n`;
     }
 
-    analysisPrompt += `\n**Strategy:**\n${strategy}\n\n`;
+    analysisPrompt += `\n**Trading Strateg${strategies.length > 1 ? 'ies' : 'y'}:**\n`;
+    strategies.forEach((strat, index) => {
+      analysisPrompt += `\n--- Strategy ${index + 1}: ${strat.name} ---\n${strat.text}\n`;
+    });
+    analysisPrompt += `\n`;
 
     if (charts.length > 1) {
       analysisPrompt += `Provide BRIEF analysis:\n`;

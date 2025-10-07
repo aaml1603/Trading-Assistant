@@ -40,6 +40,8 @@ export interface Conversation {
   userId: ObjectId;
   title: string;
   messages: ChatMessage[];
+  strategies?: Array<{ id: string; name: string; text: string; analysis: string }>;
+  // Legacy fields for backward compatibility
   strategyText?: string;
   strategyAnalysis?: string;
   isManuallyRenamed?: boolean;

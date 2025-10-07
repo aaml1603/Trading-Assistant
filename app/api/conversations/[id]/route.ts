@@ -68,7 +68,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { messages, strategyText, strategyAnalysis, title, isManuallyRenamed } = body;
+    const { messages, strategies, strategyText, strategyAnalysis, title, isManuallyRenamed } = body;
 
     // Validate title if provided
     if (title !== undefined) {
@@ -91,7 +91,9 @@ export async function PATCH(
     };
 
     if (messages) updateFields.messages = messages;
-    if (strategyText !== undefined) updateFields.strategyText = sanitizeString(strategyText, 500000); // Large limit for strategy text
+    if (strategies !== undefined) updateFields.strategies = strategies;
+    // Legacy support for old single strategy format
+    if (strategyText !== undefined) updateFields.strategyText = sanitizeString(strategyText, 500000);
     if (strategyAnalysis !== undefined) updateFields.strategyAnalysis = sanitizeString(strategyAnalysis, 100000);
     if (title !== undefined) updateFields.title = sanitizeString(title, 200);
     if (isManuallyRenamed !== undefined) updateFields.isManuallyRenamed = isManuallyRenamed;

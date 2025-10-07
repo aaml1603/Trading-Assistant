@@ -151,8 +151,7 @@ function TradingAssistant() {
   ]);
 
   const [inputValue, setInputValue] = useState('');
-  const [strategyAnalysis, setStrategyAnalysis] = useState<string | null>(null);
-  const [strategyText, setStrategyText] = useState<string>('');
+  const [strategies, setStrategies] = useState<Array<{ id: string; name: string; text: string; analysis: string }>>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [chartImages, setChartImages] = useState<Array<{ base64: string; mimeType: string; timeframe: string }>>([]);
   const [indicatorImages, setIndicatorImages] = useState<Array<{ base64: string; mimeType: string }>>([]);
@@ -203,8 +202,7 @@ function TradingAssistant() {
       const data = await response.json();
       if (response.ok) {
         setMessages(data.conversation.messages || []);
-        setStrategyText(data.conversation.strategyText || '');
-        setStrategyAnalysis(data.conversation.strategyAnalysis || null);
+        setStrategies(data.conversation.strategies || []);
         setCurrentConversationId(conversationId);
       }
     } catch (error) {
@@ -232,8 +230,7 @@ function TradingAssistant() {
           role: 'assistant',
           timestamp: new Date(),
         }]);
-        setStrategyText('');
-        setStrategyAnalysis(null);
+        setStrategies([]);
         setChartImages([]);
         setIndicatorImages([]);
         await loadConversations();
@@ -256,14 +253,13 @@ function TradingAssistant() {
         },
         body: JSON.stringify({
           messages,
-          strategyText,
-          strategyAnalysis,
+          strategies,
         }),
       });
     } catch (error) {
       console.error('Error saving conversation:', error);
     }
-  }, [currentConversationId, messages, strategyText, strategyAnalysis, token]);
+  }, [currentConversationId, messages, strategies, token]);
 
   // Delete conversation
   const deleteConversation = useCallback(async (conversationId: string) => {
@@ -474,8 +470,14 @@ function TradingAssistant() {
         throw new Error(data.error || 'Failed to analyze strategy');
       }
 
-      setStrategyAnalysis(data.analysis);
-      setStrategyText(data.strategyText);
+      const newStrategy = {
+        id: data.strategyId || Date.now().toString(),
+        name: file.name.replace(/\.(pdf|txt)$/i, ''),
+        text: data.strategyText,
+        analysis: data.analysis,
+      };
+
+      setStrategies(prev => [...prev, newStrategy]);
 
       const assistantMessage: ChatMessage = {
         id: streamingMsgId,
@@ -521,7 +523,7 @@ function TradingAssistant() {
 
   // Chart upload handler
   const handleChartUpload = useCallback(async (charts: Array<{ file: File; timeframe: string }>, indicators: File[], description?: string) => {
-    if (!strategyText) {
+    if (strategies.length === 0) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         content: '⚠️ Please upload a trading strategy first before analyzing charts.',
@@ -601,7 +603,7 @@ function TradingAssistant() {
       });
       formData.append('indicatorCount', indicators.length.toString());
 
-      formData.append('strategy', strategyText);
+      formData.append('strategies', JSON.stringify(strategies));
 
       if (description) {
         formData.append('description', description);
@@ -662,7 +664,7 @@ function TradingAssistant() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [strategyText, messages, currentConversationId, token, generateAndUpdateTitle]);
+  }, [strategies, messages, currentConversationId, token, generateAndUpdateTitle]);
 
   const handleReset = useCallback(() => {
     createNewConversation();
@@ -751,7 +753,7 @@ function TradingAssistant() {
 
       const formData = new FormData();
       formData.append('message', messageToSend);
-      formData.append('strategy', strategyText || '');
+      formData.append('strategies', JSON.stringify(strategies));
       formData.append('conversationHistory', JSON.stringify(messages));
       formData.append('chartImages', JSON.stringify(allImages));
       formData.append('indicatorImages', JSON.stringify(allIndicators));
@@ -816,7 +818,7 @@ function TradingAssistant() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [inputValue, isAnalyzing, strategyText, messages, currentConversationId, token, generateAndUpdateTitle, pastedImages, chartImages, indicatorImages]);
+  }, [inputValue, isAnalyzing, strategies, messages, currentConversationId, token, generateAndUpdateTitle, pastedImages, chartImages, indicatorImages]);
 
   const handleCopyMessage = useCallback((messageId: string, content: string) => {
     const plainText = stripMarkdown(content);
@@ -1089,9 +1091,10 @@ function TradingAssistant() {
       {/* Input Area */}
       <div className="border-t">
         <UploadSection
-          strategyAnalysis={strategyAnalysis}
+          strategies={strategies}
           onStrategyUpload={handleStrategyUpload}
           onChartUpload={handleChartUpload}
+          onRemoveStrategy={(id) => setStrategies(prev => prev.filter(s => s.id !== id))}
           isAnalyzing={isAnalyzing}
           token={token!}
         />
@@ -1126,7 +1129,7 @@ function TradingAssistant() {
               onChange={(e) => setInputValue(e.target.value)}
               onPaste={handlePasteInChat}
               placeholder={
-                strategyText
+                strategies.length > 0
                   ? "Ask follow-up questions or paste images..."
                   : "Ask me anything about trading or paste images..."
               }
@@ -1141,10 +1144,10 @@ function TradingAssistant() {
                     <ImageIcon className="h-3 w-3" />
                     {pastedImages.length} image{pastedImages.length > 1 ? 's' : ''} attached
                   </span>
-                ) : strategyText ? (
+                ) : strategies.length > 0 ? (
                   <span className="text-xs sm:text-xs text-muted-foreground hidden sm:flex items-center gap-1">
                     <Check className="h-3 w-3" />
-                    Strategy loaded • Chat enabled
+                    {strategies.length} strateg{strategies.length > 1 ? 'ies' : 'y'} loaded • Chat enabled
                   </span>
                 ) : (
                   <span className="text-xs sm:text-xs text-muted-foreground hidden sm:block">
@@ -1218,15 +1221,17 @@ function TradingAssistant() {
 }
 
 function UploadSection({
-  strategyAnalysis,
+  strategies,
   onStrategyUpload,
   onChartUpload,
+  onRemoveStrategy,
   isAnalyzing,
   token,
 }: {
-  strategyAnalysis: string | null;
+  strategies: Array<{ id: string; name: string; text: string; analysis: string }>;
   onStrategyUpload: (file: File, comments?: string) => void;
   onChartUpload: (charts: Array<{ file: File; timeframe: string }>, indicators: File[], description?: string) => void;
+  onRemoveStrategy: (id: string) => void;
   isAnalyzing: boolean;
   token: string;
 }) {
@@ -1320,9 +1325,7 @@ function UploadSection({
     }
   };
 
-  const hasStrategy = strategyAnalysis !== null && strategyAnalysis.length > 0;
-
-  console.log('UploadSection render:', { hasStrategy, strategyAnalysisLength: strategyAnalysis?.length });
+  const hasStrategy = strategies.length > 0;
 
   // Initialize speech recognition on mount
   useEffect(() => {
@@ -1591,7 +1594,8 @@ Error: ${error?.message || 'Unknown error'}`;
 
   return (
     <div className="px-3 sm:px-6 py-2 sm:py-3 bg-muted/30" onPaste={hasStrategy ? handlePaste : undefined}>
-      {!hasStrategy ? (
+      <div className="space-y-2">
+        {/* Strategy upload area - always visible */}
         <div className="space-y-2">
           {/* Compact button row - horizontal layout */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -1628,6 +1632,31 @@ Error: ${error?.message || 'Unknown error'}`;
             />
           </div>
 
+          {/* Show loaded strategies */}
+          {strategies.length > 0 && (
+            <div className="rounded-lg border bg-muted/50 p-2">
+              <div className="text-xs font-medium text-muted-foreground px-1 mb-1.5">
+                Loaded Strategies ({strategies.length})
+              </div>
+              <div className="space-y-1">
+                {strategies.map((strategy) => (
+                  <div key={strategy.id} className="flex items-center justify-between rounded-md border bg-background p-2">
+                    <span className="text-xs font-medium truncate flex-1">{strategy.name}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0 ml-2"
+                      onClick={() => onRemoveStrategy(strategy.id)}
+                      title="Remove strategy"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {selectedStrategyFile && showComments && (
             <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
               <div className="text-xs font-medium truncate">{selectedStrategyFile.name}</div>
@@ -1656,9 +1685,11 @@ Error: ${error?.message || 'Unknown error'}`;
             </div>
           )}
         </div>
-      ) : (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
+
+        {/* Chart upload area - only visible when strategies are loaded */}
+        {hasStrategy && (
+          <div className="space-y-2 pt-2 border-t">
+            <div className="flex items-center gap-2 flex-wrap">
             <input
               type="file"
               accept="image/*"
@@ -1900,8 +1931,9 @@ Error: ${error?.message || 'Unknown error'}`;
               </Button>
             </div>
           )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

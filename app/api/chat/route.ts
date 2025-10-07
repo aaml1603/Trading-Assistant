@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const message = formData.get('message') as string;
-    const strategy = formData.get('strategy') as string;
+    const strategiesStr = formData.get('strategies') as string;
     const conversationHistoryStr = formData.get('conversationHistory') as string;
     const chartImagesStr = formData.get('chartImages') as string;
     const indicatorImagesStr = formData.get('indicatorImages') as string;
@@ -50,7 +50,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Chat request - Strategy length:', strategy?.length || 0);
+    // Parse strategies
+    let strategies: Array<{ id: string; name: string; text: string; analysis: string }> = [];
+    try {
+      if (strategiesStr) {
+        strategies = JSON.parse(strategiesStr);
+      }
+    } catch {
+      // If parsing fails, continue without strategies
+    }
+
+    console.log('Chat request - Strategies count:', strategies.length);
 
     // Parse conversation history
     type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
@@ -103,8 +113,12 @@ export async function POST(request: NextRequest) {
       systemPrompt += `\n\nIMPORTANT - Custom Instructions (ALWAYS follow these):\n${customInstructions}`;
     }
 
-    if (strategy && strategy.trim()) {
-      systemPrompt += `\n\nThe user has already uploaded their trading strategy. Here it is:\n\n${strategy}\n\nWhen the user asks about "my strategy" or to "explain my strategy", you are referring to THIS strategy above. You have it in context - explain it based on the content provided.`;
+    if (strategies.length > 0) {
+      systemPrompt += `\n\nThe user has uploaded ${strategies.length} trading strateg${strategies.length > 1 ? 'ies' : 'y'}. Here ${strategies.length > 1 ? 'they are' : 'it is'}:\n\n`;
+      strategies.forEach((strat, index) => {
+        systemPrompt += `--- Strategy ${index + 1}: ${strat.name} ---\n${strat.text}\n\n`;
+      });
+      systemPrompt += `When the user asks about "my strategy" or "my strategies", you are referring to ${strategies.length > 1 ? 'THESE strategies' : 'THIS strategy'} above. You have ${strategies.length > 1 ? 'them' : 'it'} in context - explain based on the content provided. If multiple strategies are loaded, consider how they might work together or complement each other.`;
     }
 
     if (chartImages.length > 0) {
